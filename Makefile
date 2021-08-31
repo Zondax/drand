@@ -31,7 +31,7 @@ install:
 	go install -ldflags "-X github.com/drand/drand/cmd/drand-cli.version=`git describe --tags` -X github.com/drand/drand/cmd/drand-cli.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X github.com/drand/drand/cmd/drand-cli.gitCommit=`git rev-parse HEAD`"
 
 # create the "drand" binary in the current folder
-build:
+build: build_proto
 	go build -o drand -mod=readonly -ldflags "-X github.com/drand/drand/cmd/drand-cli.version=`git describe --tags` -X github.com/drand/drand/cmd/drand-cli.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X github.com/drand/drand/cmd/drand-cli.gitCommit=`git rev-parse HEAD`"
 
 drand: build
@@ -55,3 +55,8 @@ drand-relay-gossip: relay-gossip
 relay-s3:
 	go build -o drand-relay-s3 -mod=readonly -ldflags "-X main.version=`git describe --tags` -X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`" ./cmd/relay-s3
 drand-relay-s3: relay-s3
+
+build_proto:
+	go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	cd protobuf && sh ./compile_proto.sh
