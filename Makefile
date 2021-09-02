@@ -60,3 +60,20 @@ build_proto:
 	go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	cd protobuf && sh ./compile_proto.sh
+
+clean:
+	go clean
+
+check-modtidy:
+	go mod tidy
+	git diff --exit-code -- go.mod go.sum
+
+install_lint:
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.41.1
+
+lint:
+	golangci-lint --version
+	golangci-lint run -E gofmt -E gosec -E goconst -E gocritic --timeout 5m
+
+lint-todo:
+	golangci-lint run -E stylecheck -E gosec -E goconst -E godox -E gocritic
