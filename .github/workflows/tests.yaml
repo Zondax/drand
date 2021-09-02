@@ -3,7 +3,7 @@ on:
   - push
 
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -14,7 +14,16 @@ jobs:
         with:
           go-version: '^1.16'
       - run: go get -v -t -d ./...
-      - run: go get github.com/jstemmer/go-junit-report
+      - name: Build
+        run: make build
+      - name: ModTidy check
+        run: make check-modtidy
+      - name: Lint check
+        run: |
+          make install_lint
+          make lint
+      - name: Unit tests
+        run: make test-unit
       - name: Unit tests
         run: make test-unit
       - name: Integration tests
