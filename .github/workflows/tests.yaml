@@ -16,11 +16,9 @@ jobs:
       - run: go get -v -t -d ./...
       - run: go get github.com/jstemmer/go-junit-report
       - name: Unit tests
-        run: |
-          mkdir /tmp/test-results
-          trap "go-junit-report </tmp/test-results/go-test.out > /tmp/test-results/go-test-report.xml" EXIT
-          make test-unit | tee /tmp/test-results/go-test.out
-      - run: make test-integration
+        run: make test-unit
+      - name: Integration tests
+        run: make test-integration
 
   coverage:
     runs-on: ubuntu-latest
