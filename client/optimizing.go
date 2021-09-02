@@ -31,6 +31,19 @@ const (
 	maxUnixTime = 1<<63 - 62135596801
 )
 
+type optimizingClient struct {
+	sync.RWMutex
+	clients            []Client
+	passiveClients     []Client
+	stats              []*requestStat
+	requestTimeout     time.Duration
+	requestConcurrency int
+	speedTestInterval  time.Duration
+	watchRetryInterval time.Duration
+	log                log.Logger
+	done               chan struct{}
+}
+
 // newOptimizingClient creates a drand client that measures the speed of clients
 // and uses the fastest ones.
 //
@@ -113,19 +126,6 @@ func (oc *optimizingClient) MarkPassive(c Client) {
 			s.startTime = time.Unix(maxUnixTime, 999999999)
 		}
 	}
-}
-
-type optimizingClient struct {
-	sync.RWMutex
-	clients            []Client
-	passiveClients     []Client
-	stats              []*requestStat
-	requestTimeout     time.Duration
-	requestConcurrency int
-	speedTestInterval  time.Duration
-	watchRetryInterval time.Duration
-	log                log.Logger
-	done               chan struct{}
 }
 
 // String returns the name of this client.
