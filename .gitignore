@@ -10,3 +10,4 @@ web/public/
 /drand
 cover*
 .idea
+**/*.pb.go
