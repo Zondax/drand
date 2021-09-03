@@ -236,6 +236,7 @@ func (h *handler) getRand(ctx context.Context, info *chain.Info, round uint64) (
 func (h *handler) PublicRand(w http.ResponseWriter, r *http.Request) {
 	// Get the round.
 	round := strings.Replace(r.URL.Path, "/public/", "", 1)
+	// nolint: gomnd
 	roundN, err := strconv.ParseUint(round, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

@@ -18,6 +18,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const AcessLogOpenMode = 0666
+
 // Automatically set through -ldflags
 // Example: go install -ldflags "-X main.version=`git describe --tags`
 //   -X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`"
@@ -64,7 +66,7 @@ func Relay(c *cli.Context) error {
 	}
 
 	if c.IsSet(accessLogFlag.Name) {
-		logFile, err := os.OpenFile(c.String(accessLogFlag.Name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+		logFile, err := os.OpenFile(c.String(accessLogFlag.Name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, AcessLogOpenMode)
 		if err != nil {
 			return fmt.Errorf("failed to open access log: %w", err)
 		}

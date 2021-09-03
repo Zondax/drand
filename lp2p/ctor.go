@@ -34,11 +34,13 @@ const (
 	// userAgent sets the libp2p user-agent which is sent along with the identify protocol.
 	userAgent = "drand-relay/0.0.0"
 	// directConnectTicks makes pubsub check it's connected to direct peers every N seconds.
-	directConnectTicks uint64 = 5
-	lowWater                  = 50
-	highWater                 = 200
-	gracePeriod               = time.Minute
-	bootstrapTimeout          = 5 * time.Second
+	directConnectTicks       uint64 = 5
+	lowWater                        = 50
+	highWater                       = 200
+	gracePeriod                     = time.Minute
+	bootstrapTimeout                = 5 * time.Second
+	identityFolderPermission        = 0755
+	identityFilePermission          = 0600
 )
 
 // PubSubTopic generates a drand pubsub topic from a chain hash.
@@ -150,11 +152,11 @@ func LoadOrCreatePrivKey(identityPath string, log dlog.Logger) (crypto.PrivKey, 
 		if err != nil {
 			return nil, xerrors.Errorf("marshaling private key: %w", err)
 		}
-		err = os.MkdirAll(path.Dir(identityPath), 0755)
+		err = os.MkdirAll(path.Dir(identityPath), identityFolderPermission)
 		if err != nil {
 			return nil, xerrors.Errorf("creating identity directory and parents: %w", err)
 		}
-		err = ioutil.WriteFile(identityPath, []byte(base64.RawStdEncoding.EncodeToString(b)), 0600)
+		err = ioutil.WriteFile(identityPath, []byte(base64.RawStdEncoding.EncodeToString(b)), identityFilePermission)
 		if err != nil {
 			return nil, xerrors.Errorf("writing identity file: %w", err)
 		}

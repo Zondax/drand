@@ -29,6 +29,7 @@ const (
 	defaultChannelBuffer      = 5
 
 	maxUnixTime = 1<<63 - 62135596801
+	passiveTime = 999999999
 )
 
 type optimizingClient struct {
@@ -123,7 +124,7 @@ func (oc *optimizingClient) MarkPassive(c Client) {
 	for _, s := range oc.stats {
 		if s.client == c {
 			s.rtt = math.MaxInt64
-			s.startTime = time.Unix(maxUnixTime, 999999999)
+			s.startTime = time.Unix(maxUnixTime, passiveTime)
 		}
 	}
 }

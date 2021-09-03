@@ -6,6 +6,9 @@ import (
 	kyber "github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
 
+	// FIXME golint fails here --> Message: This version is vulnerable to rogue public-key attack and
+	// FIXME the new version of the protocol should be used to make sure a signature aggregate cannot be verified by a forged key.
+	// nolint: staticcheck
 	sign "github.com/drand/kyber/sign/bls"
 	"github.com/drand/kyber/sign/schnorr"
 	"github.com/drand/kyber/sign/tbls"
