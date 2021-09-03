@@ -21,7 +21,7 @@ jobs:
           mkdir tmp
           unzip -o $PROTOC_ZIP -d tmp
           cp tmp/bin/protoc /usr/local/bin
-          cp -r tmp/include/* /usr/local/include
+          sudo cp -r tmp/include/* /usr/local/include
           rm -f $PROTOC_ZIP
           rm -rf tmp
       - name: Install Go Packages
