@@ -43,6 +43,8 @@ jobs:
         uses: arduino/setup-protoc@v1.1.2
         with:
           version: '3.14.0'
+      - name: Generate Protobufs
+        run: make build_proto
       - name: Modtidy check
         run: make check-modtidy
       - name: Lint check
