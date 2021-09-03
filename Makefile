@@ -53,8 +53,8 @@ demo:
 ############################################ Build ############################################
 
 build_proto:
-	go install github.com/golang/protobuf/protoc-gen-go
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go get -u github.com/golang/protobuf/protoc-gen-go
+	go get -u google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	cd protobuf && sh ./compile_proto.sh
 
 # create the "drand" binary and install it in $GOBIN
