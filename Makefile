@@ -41,6 +41,11 @@ test-integration:
 	go test -v ./demo
 	cd demo && go build && ./demo -build -test -debug
 
+coverage:
+	go get -u github.com/ory/go-acc
+	go get -v -t -d ./...
+	go-acc ./...
+
 demo:
 	cd demo && go build && ./demo -build
 	#cd demo && sudo ./run.sh
@@ -91,8 +96,8 @@ drand-relay-s3: relay-s3
 install_deps_linux:
 	PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
 	curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
-	unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
-	unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+	sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+	sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
 	rm -f $PROTOC_ZIP
 
 install_deps_darwin:
