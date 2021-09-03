@@ -15,15 +15,9 @@ jobs:
         with:
           go-version: '^1.16'
       - name: Install Protoc
-        run: |
-          PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
-          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
-          mkdir tmp
-          unzip -o $PROTOC_ZIP -d tmp
-          cp tmp/bin/protoc /usr/local/bin
-          sudo cp -r tmp/include/* /usr/local/include
-          rm -f $PROTOC_ZIP
-          rm -rf tmp
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          version: '3.14.0'
       - name: Install Go Packages
         run: go get -v -t -d ./...
       - name: Build
@@ -47,8 +41,12 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.16'
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          version: '3.14.0'
       - run: go get -v -t -d ./...
-      - name: ModTidy check
+      - name: Modtidy check
         run: make check-modtidy
       - name: Lint check
         run: |
@@ -73,5 +71,9 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.16'
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          version: '3.14.0'
       - run: make coverage
       - run: bash <(curl -s https://codecov.io/bash)
