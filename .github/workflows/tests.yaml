@@ -15,7 +15,15 @@ jobs:
         with:
           go-version: '^1.16'
       - name: Install Protoc
-        run: pip install protobuf
+        run: |
+          PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
+          mkdir tmp
+          unzip -o $PROTOC_ZIP -d tmp
+          cp tmp/bin/protoc /usr/local/bin
+          cp tmp/include/* /usr/local/include
+          rm -f $PROTOC_ZIP
+          rm -rf tmp
       - name: Install Go Packages
         run: go get -v -t -d ./...
       - name: Build
