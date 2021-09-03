@@ -48,8 +48,7 @@ demo:
 ############################################ Build ############################################
 
 build_proto:
-	go get -u github.com/golang/protobuf/proto
-	go get -u github.com/golang/protobuf/protoc-gen-go
+	go install github.com/golang/protobuf/protoc-gen-go
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	cd protobuf && sh ./compile_proto.sh
 
@@ -85,3 +84,16 @@ relay-s3: build_proto
 	go build -o drand-relay-s3 -mod=readonly -ldflags "-X main.version=`git describe --tags` -X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`" ./cmd/relay-s3
 
 drand-relay-s3: relay-s3
+
+
+############################################ Deps ############################################
+
+install_deps_linux:
+	PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
+	curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
+	unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+	unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+	rm -f $PROTOC_ZIP
+
+install_deps_darwin:
+	brew install protoc
