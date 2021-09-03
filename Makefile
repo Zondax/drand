@@ -48,7 +48,8 @@ demo:
 ############################################ Build ############################################
 
 build_proto:
-	go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+	go get -u github.com/golang/protobuf/proto
+	go get -u github.com/golang/protobuf/protoc-gen-go
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	cd protobuf && sh ./compile_proto.sh
 
