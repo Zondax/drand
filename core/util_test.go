@@ -435,6 +435,8 @@ func (d *DrandTest2) RunReshare(
 		case finalGroup := <-groupCh:
 			d.newGroup = finalGroup
 			require.NoError(d.t, key.Save(d.groupPath, d.newGroup, false))
+			fmt.Println(" --- RESHARING FINISHED ---")
+
 			return finalGroup, nil
 		case err := <-errCh:
 			fmt.Println("ERRROR: ", err)

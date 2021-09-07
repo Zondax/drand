@@ -120,19 +120,21 @@ func TestDrandDKGBroadcastDeny(t *testing.T) {
 
 		dt := NewDrandTest2(t, n, thr, beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		// close connection between a pair of nodes
 		n1 := dt.nodes[1]
 		n2 := dt.nodes[2]
 		n1.drand.DenyBroadcastTo(n2.addr)
 		n2.drand.DenyBroadcastTo(n1.addr)
+
 		group1 := dt.RunDKG()
 		dt.MoveToTime(group1.GenesisTime)
 		dt.MoveTime(1 * time.Second)
-		fmt.Printf("\n\n --- DKG FINISHED ---\n\n")
-		time.Sleep(200 * time.Millisecond)
-		_, err := dt.RunReshare(n, 0, thr, 1*time.Second, false, false)
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
 		require.NoError(t, err)
-		fmt.Println(" --- RESHARING FINISHED ---")
+
+		_, err = dt.RunReshare(n, 0, thr, 1*time.Second, false, false)
+		require.NoError(t, err)
 	}
 }
 
