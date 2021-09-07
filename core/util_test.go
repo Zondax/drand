@@ -61,6 +61,10 @@ type DrandTest2 struct {
 	// nodes that actually ran the resharing phase - it's a combination of nodes
 	// and new nodes. These are the one that should appear in the newGroup
 	resharedNodes []*Node
+	dkgStatus     struct {
+		shares []*key.Share
+		mutex  sync.Mutex
+	}
 }
 
 // NewDrandTest creates a drand test scenario with initial n nodes and ready to
@@ -70,6 +74,11 @@ func NewDrandTest2(t *testing.T, n, thr int, period time.Duration, decouplePrevS
 	dt := new(DrandTest2)
 	drands, _, dir, certPaths := BatchNewDrand(n, false, decouplePrevSig,
 		WithCallOption(grpc.WaitForReady(true)),
+		WithDKGCallback(func(share *key.Share) {
+			dt.dkgStatus.mutex.Lock()
+			dt.dkgStatus.shares = append(dt.dkgStatus.shares, share)
+			dt.dkgStatus.mutex.Unlock()
+		}),
 	)
 	dt.t = t
 	dt.dir = dir
@@ -80,6 +89,8 @@ func NewDrandTest2(t *testing.T, n, thr int, period time.Duration, decouplePrevS
 	dt.period = period
 	dt.clock = clock.NewFakeClock()
 	dt.nodes = make([]*Node, 0, n)
+	dt.dkgStatus.shares = make([]*key.Share, 0, n)
+
 	for i, drand := range drands {
 		node := dt.newNode(drand, dt.certPaths[i])
 		dt.nodes = append(dt.nodes, node)
@@ -104,6 +115,8 @@ func (d *DrandTest2) Ids(n int, newGroup bool) []string {
 
 // RunDKG runs the DKG with the initial nodes created during NewDrandTest
 func (d *DrandTest2) RunDKG() *key.Group {
+	d.dkgStatus.shares = make([]*key.Share, 0, len(d.nodes))
+
 	// common secret between participants
 	secret := "thisisdkg"
 	root := d.nodes[0]
@@ -446,6 +459,61 @@ func (d *DrandTest2) newNode(dr *Drand, certPath string) *Node {
 		addr:     id,
 		drand:    dr,
 		clock:    c,
+	}
+}
+
+// WaitToFinishDKG
+func (d *DrandTest2) WaitToFinishDKG(step time.Duration, maxSteps int) error {
+	counter := 0
+
+	for {
+		counter++
+
+		if counter == maxSteps {
+			return fmt.Errorf("Timeout waiting nodes to finish DKG process")
+		}
+
+		if len(d.dkgStatus.shares) == len(d.nodes) {
+			break
+		}
+
+		fmt.Printf("Waiting nodes to finish DGK process. Counter: %d \n", counter)
+		time.Sleep(step)
+	}
+
+	fmt.Println("--- DKG FINISHED ---")
+
+	return nil
+}
+
+// WaitToFinishSyncing
+func (d *DrandTest2) WaitToFinishSyncing(id string, upTo uint64, timeout time.Duration) error {
+	node := d.GetDrand(id, false)
+	require.NotNil(d.t, node)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer ctx.Done()
+
+	peer := net.CreatePeer(node.addr, true)
+	req := &drand.PublicRandRequest{Round: 0}
+	client := NewGrpcClientFromCert(node.drand.opts.certmanager)
+
+	respChan, err := client.client.PublicRandStream(ctx, peer, req)
+	if err != nil {
+		return fmt.Errorf("Error waiting node %s to finish syncing process", id)
+	}
+
+	for {
+		select {
+		case resp := <-respChan:
+			if resp.Round == upTo {
+				fmt.Printf("Node %s finished chatch up process", id)
+				return nil
+			}
+		case <-time.After(timeout):
+			cancel()
+			return fmt.Errorf("Timeout waiting node %s to finish syncing process", id)
+		}
 	}
 }
 

@@ -34,8 +34,13 @@ func setFDLimit() {
 }
 
 // 1 second after end of dkg
-var testBeaconOffset = 1
-var testDkgTimeout = 2 * time.Second
+const (
+	testBeaconOffset  = 1
+	testDkgTimeout    = 2 * time.Second
+	dkgTimeoutCounter = 50
+	dkgTimeoutStep    = 100 * time.Millisecond
+	syncTimeout       = 1 * time.Second
+)
 
 var decouplePrevSigArray = [2]bool{false, true}
 
@@ -61,9 +66,10 @@ func DrandLargeTestFunc(t *testing.T, decouplePrevSig bool) {
 
 	dt := NewDrandTest2(t, n, key.DefaultThreshold(n), beaconPeriod, decouplePrevSig)
 	defer dt.Cleanup()
+
 	dt.RunDKG()
-	time.Sleep(getSleepDuration())
-	fmt.Println(" --- DKG FINISHED ---")
+	err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+	require.NoError(t, err)
 }
 
 func TestDrandDKGFresh(t *testing.T) {
@@ -73,9 +79,11 @@ func TestDrandDKGFresh(t *testing.T) {
 
 		dt := NewDrandTest2(t, n, key.DefaultThreshold(n), beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		finalGroup := dt.RunDKG()
-		time.Sleep(getSleepDuration())
-		fmt.Println(" --- DKG FINISHED ---")
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		// make the last node fail
 		lastID := dt.nodes[n-1].addr
 		dt.StopDrand(lastID, false)
@@ -91,10 +99,11 @@ func TestDrandDKGFresh(t *testing.T) {
 		fmt.Println(" --- Test BEACON LENGTH --- ")
 		dt.TestBeaconLength(2, false, dt.Ids(n-1, false)...)
 		fmt.Printf("\n\n --- START LAST DRAND %s ---\n\n", lastID)
+
 		// start last one
 		dt.StartDrand(lastID, true, false)
-		// leave some room to do the catchup
-		time.Sleep(100 * time.Millisecond)
+		dt.WaitToFinishSyncing(lastID, 1, syncTimeout)
+
 		fmt.Printf("\n\n --- STARTED BEACON DRAND %s ---\n\n", lastID)
 		time.Sleep(2 * time.Second)
 		dt.MoveTime(beaconPeriod)
@@ -136,10 +145,11 @@ func TestDrandReshareForce(t *testing.T) {
 
 		dt := NewDrandTest2(t, oldN, oldThr, beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group1 := dt.RunDKG()
-		// make sure all nodes had enough time to run their go routines to start the
-		// beacon handler - related to CI problems
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		dt.MoveToTime(group1.GenesisTime)
 		dt.MoveTime(1 * time.Second)
 
@@ -169,10 +179,11 @@ func TestDrandDKGReshareAbsent(t *testing.T) {
 
 		dt := NewDrandTest2(t, oldN, oldThr, beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group1 := dt.RunDKG()
-		// make sure all nodes had enough time to run their go routines to start the
-		// beacon handler - related to CI problems
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		dt.MoveToTime(group1.GenesisTime)
 		// move to genesis time - so nodes start to make a round
 		// dt.MoveTime(offsetGenesis)
@@ -213,10 +224,11 @@ func TestDrandDKGReshareTimeout(t *testing.T) {
 
 		dt := NewDrandTest2(t, oldN, oldThr, beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group1 := dt.RunDKG()
-		// make sure all nodes had enough time to run their go routines to start the
-		// beacon handler - related to CI problems
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		dt.MoveToTime(group1.GenesisTime)
 		// move to genesis time - so nodes start to make a round
 		// dt.MoveTime(offsetGenesis)
@@ -294,10 +306,11 @@ func TestDrandResharePreempt(t *testing.T) {
 
 		dt := NewDrandTest2(t, oldN, Thr, beaconPeriod, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group1 := dt.RunDKG()
-		// make sure all nodes had enough time to run their go routines to start the
-		// beacon handler - related to CI problems
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		dt.MoveToTime(group1.GenesisTime)
 		// move to genesis time - so nodes start to make a round
 		dt.TestBeaconLength(2, false, dt.Ids(oldN, false)...)
@@ -368,9 +381,12 @@ func TestDrandPublicChainInfo(t *testing.T) {
 		n := 10
 		thr := key.DefaultThreshold(n)
 		p := 1 * time.Second
+
 		dt := NewDrandTest2(t, n, thr, p, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group := dt.RunDKG()
+
 		ci := chain.NewChainInfo(group)
 		cm := dt.nodes[0].drand.opts.certmanager
 		client := NewGrpcClientFromCert(cm)
@@ -412,10 +428,14 @@ func TestDrandPublicRand(t *testing.T) {
 		n := 4
 		thr := key.DefaultThreshold(n)
 		p := 1 * time.Second
+
 		dt := NewDrandTest2(t, n, thr, p, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group := dt.RunDKG()
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		root := dt.nodes[0].drand
 		rootID := root.priv.Public
 
@@ -456,10 +476,14 @@ func TestDrandPublicStream(t *testing.T) {
 		n := 4
 		thr := key.DefaultThreshold(n)
 		p := 1 * time.Second
+
 		dt := NewDrandTest2(t, n, thr, p, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group := dt.RunDKG()
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		root := dt.nodes[0]
 		rootID := root.drand.priv.Public
 
@@ -528,8 +552,11 @@ func TestDrandFollowChain(tt *testing.T) {
 		n, p := 4, 1*time.Second
 		dt := NewDrandTest2(tt, n, key.DefaultThreshold(n), p, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group := dt.RunDKG()
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(tt, err)
+
 		rootID := dt.nodes[0].drand.priv.Public
 
 		dt.MoveToTime(group.GenesisTime)
@@ -614,10 +641,14 @@ func TestDrandPublicStreamProxy(t *testing.T) {
 		n := 4
 		thr := key.DefaultThreshold(n)
 		p := 1 * time.Second
+
 		dt := NewDrandTest2(t, n, thr, p, decouplePrevSig)
 		defer dt.Cleanup()
+
 		group := dt.RunDKG()
-		time.Sleep(getSleepDuration())
+		err := dt.WaitToFinishDKG(dkgTimeoutStep, dkgTimeoutCounter)
+		require.NoError(t, err)
+
 		root := dt.nodes[0]
 
 		dt.MoveToTime(group.GenesisTime)
