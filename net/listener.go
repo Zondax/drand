@@ -19,6 +19,7 @@ import (
 
 func registerGRPCMetrics() {
 	if err := metrics.PrivateMetrics.Register(grpc_prometheus.DefaultServerMetrics); err != nil {
+		// TODO: error registering metrics is ignored
 		log.DefaultLogger().Warn("grpc Listener", "failed metrics registration", "err", err)
 	}
 }
