@@ -691,7 +691,7 @@ type pushResult struct {
 	err     error
 }
 
-// pushDKGInfoPacket sets a specific DKG info packet to spcified nodes, and returns a stream of responses.
+// pushDKGInfoPacket sets a specific DKG info packet to specified nodes, and returns a stream of responses.
 func (d *Drand) pushDKGInfoPacket(ctx context.Context, nodes []*key.Node, packet *drand.DKGInfoPacket) chan pushResult {
 	results := make(chan pushResult, len(nodes))
 
@@ -708,8 +708,8 @@ func (d *Drand) pushDKGInfoPacket(ctx context.Context, nodes []*key.Node, packet
 	return results
 }
 
-// pushDKGInfo sends the information to run the DKG to all specified nodes. The
-// call is blocking until all nodes have replied or after one minute timeouts.
+// pushDKGInfo sends the information to run the DKG to all specified nodes.
+// The call is blocking until all nodes have replied or after one minute timeouts.
 func (d *Drand) pushDKGInfo(outgoing, incoming []*key.Node, previousThreshold int, group *key.Group, secret []byte, timeout uint32) error {
 	// sign the group to prove you are the leader
 	signature, err := key.DKGAuthScheme.Sign(d.priv.Key, group.Hash())
@@ -717,6 +717,8 @@ func (d *Drand) pushDKGInfo(outgoing, incoming []*key.Node, previousThreshold in
 		d.log.Error("setup", "leader", "group_signature", err)
 		return fmt.Errorf("drand: error signing group: %w", err)
 	}
+
+	// Prepare packet
 	packet := &drand.DKGInfoPacket{
 		NewGroup:    group.ToProto(),
 		SecretProof: secret,
@@ -726,6 +728,7 @@ func (d *Drand) pushDKGInfo(outgoing, incoming []*key.Node, previousThreshold in
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Calculate threshold
 	newThreshold := group.Threshold
 	if nodesContainAddr(outgoing, d.priv.Public.Address()) {
 		previousThreshold--

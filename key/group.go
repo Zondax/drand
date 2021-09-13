@@ -313,7 +313,7 @@ func MinimumT(n int) int {
 	return (n >> 1) + 1
 }
 
-// GroupFromProto convertes a protobuf group into a local Group object
+// GroupFromProto converts a protobuf group into a local Group object
 func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 	var nodes = make([]*Node, 0, len(g.GetNodes()))
 	for _, id := range g.GetNodes() {

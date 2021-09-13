@@ -12,7 +12,7 @@ import (
 
 // PrivateGateway is the main interface to communicate to other drand nodes. It
 // acts as a listener to receive incoming requests and acts a client connecting
-// to drand particpants.
+// to drand participants.
 // The gateway fixes all drand functionalities offered by drand.
 type PrivateGateway struct {
 	Listener
