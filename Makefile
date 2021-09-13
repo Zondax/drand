@@ -1,5 +1,7 @@
 .PHONY: test test-unit test-integration demo deploy-local linter install build client drand relay-http relay-gossip relay-s3
 
+drand: build
+
 ####################  Lint and fmt process ##################
 
 install_lint:
@@ -71,8 +73,6 @@ install:
 # create the "drand" binary in the current folder
 build:
 	go build -o drand -mod=readonly -ldflags "-X github.com/drand/drand/cmd/drand-cli.version=`git describe --tags` -X github.com/drand/drand/cmd/drand-cli.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X github.com/drand/drand/cmd/drand-cli.gitCommit=`git rev-parse HEAD`"
-
-drand: build
 
 # create the "drand-client" binary in the current folder
 client:
