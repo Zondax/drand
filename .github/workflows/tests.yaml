@@ -14,6 +14,13 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '^1.16'
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       - name: Build
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
@@ -33,6 +40,13 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.16'
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       - run: go get -v -t -d ./...
       - name: Unit tests
         run: make test-unit
@@ -48,6 +62,13 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.16'
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       - run: go get -u github.com/ory/go-acc
       - run: go get -v -t -d ./...
       - run: go-acc ./...
