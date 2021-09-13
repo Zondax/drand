@@ -10,3 +10,8 @@ web/public/
 /drand
 cover*
 .idea
+drand
+drand-client
+drand-relay-gossip
+drand-relay-http
+drand-relay-s3
