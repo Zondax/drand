@@ -132,7 +132,7 @@ func BatchNewDrand(t *testing.T, n int, insecure bool, opts ...ConfigOption) (
 
 		confOptions = append(confOptions,
 			WithControlPort(ports[i]),
-			WithLogLevel(log.LogWarn))
+			WithLogLevel(log.LogDebug))
 		// add options in last so it overwrites the default
 		confOptions = append(confOptions, opts...)
 
