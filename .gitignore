@@ -15,3 +15,4 @@ drand-client
 drand-relay-gossip
 drand-relay-http
 drand-relay-s3
+docker/data*
