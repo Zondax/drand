@@ -17,11 +17,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func registerGRPCMetrics() {
+func registerGRPCMetrics() error {
 	if err := metrics.PrivateMetrics.Register(grpc_prometheus.DefaultServerMetrics); err != nil {
-		// TODO: error registering metrics is ignored
 		log.DefaultLogger().Warn("grpc Listener", "failed metrics registration", "err", err)
+		return err
 	}
+	return nil
 }
 
 // NewGRPCListenerForPrivate creates a new listener for the Public and Protocol APIs over GRPC.
@@ -69,9 +70,14 @@ func NewGRPCListenerForPrivate(
 		gr.lis = tls.NewListener(lis, gr.restServer.TLSConfig)
 		g = gr
 	}
+
 	http_grpc.RegisterHTTPServer(grpcServer, http_grpc_server.NewServer(metrics.GroupHandler()))
 	grpc_prometheus.Register(grpcServer)
-	registerGRPCMetrics()
+
+	if err := registerGRPCMetrics(); err != nil {
+		return nil, err
+	}
+
 	return g, nil
 }
 
