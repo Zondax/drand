@@ -94,6 +94,9 @@ relay-s3:
 	go build -o drand-relay-s3 -mod=readonly -ldflags "-X main.version=`git describe --tags` -X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`" ./cmd/relay-s3
 drand-relay-s3: relay-s3
 
+build_docker:
+	docker build --build-arg version=`git describe --tags` --build-arg gitCommit=`git rev-parse HEAD` -t drandorg/go-drand:latest .
+
 build_all: drand drand-client drand-relay-http drand-relay-gossip drand-relay-s3
 
 ############################################ Deps ############################################
