@@ -132,7 +132,7 @@ func BatchNewDrand(t *testing.T, n int, insecure bool, opts ...ConfigOption) (
 
 		confOptions = append(confOptions,
 			WithControlPort(ports[i]),
-			WithLogLevel(log.LogDebug))
+			WithLogLevel(log.LogNone))
 		// add options in last so it overwrites the default
 		confOptions = append(confOptions, opts...)
 
@@ -194,18 +194,19 @@ func NewDrandTestScenario(t *testing.T, n, thr int, period time.Duration) *Drand
 
 // Ids returns the list of the first n ids given the newGroup parameter (either
 // in the original group or the reshared one)
+// Deprecated: Rename this to addresses to align naming
 func (d *DrandTestScenario) Ids(n int, newGroup bool) []string {
 	nodes := d.nodes
 	if newGroup {
 		nodes = d.resharedNodes
 	}
 
-	var ids []string
+	var addresses []string
 	for _, node := range nodes[:n] {
-		ids = append(ids, node.addr)
+		addresses = append(addresses, node.addr)
 	}
 
-	return ids
+	return addresses
 }
 
 // RunDKG runs the DKG with the initial nodes created during NewDrandTest
@@ -249,11 +250,12 @@ func (d *DrandTestScenario) RunDKG() *key.Group {
 		go func(n *MockNode) {
 			client, err := net.NewControlClient(n.drand.opts.controlPort)
 			require.NoError(d.t, err)
-			gp, err := client.InitDKG(leaderNode.drand.priv.Public, nil, secret)
+			groupPacket, err := client.InitDKG(leaderNode.drand.priv.Public, nil, secret)
 			require.NoError(d.t, err)
-			g, err := key.GroupFromProto(gp)
+			group, err := key.GroupFromProto(groupPacket)
 			require.NoError(d.t, err)
-			d.t.Logf("[RunDKG] NonLeader Finished. GroupHash %x", g.Hash())
+
+			d.t.Logf("[RunDKG] NonLeader Finished. GroupHash %x", group.Hash())
 			wg.Done()
 		}(node)
 	}
@@ -305,19 +307,19 @@ func (d *DrandTestScenario) GetBeacon(id string, round int, newGroup bool) (*cha
 
 // GetMockNode returns the node associated with this address, either in the new
 // group or the current group.
-func (d *DrandTestScenario) GetMockNode(nodeID string, newGroup bool) *MockNode {
+func (d *DrandTestScenario) GetMockNode(nodeAddress string, newGroup bool) *MockNode {
 	nodes := d.nodes
 	if newGroup {
 		nodes = d.resharedNodes
 	}
 
 	for _, node := range nodes {
-		if node.addr == nodeID {
+		if node.addr == nodeAddress {
 			return node
 		}
 	}
 
-	panic("no nodes found at this nodeID")
+	panic("no nodes found at this nodeAddress")
 }
 
 // StopMockNode stops a node from the first group
@@ -347,16 +349,18 @@ func (d *DrandTestScenario) StopMockNode(nodeAddr string, newGroup bool) {
 
 // StartDrand fetches the drand given the id, in the respective group given the
 // newGroup parameter and runs the beacon
-func (d *DrandTestScenario) StartDrand(id string, catchup, newGroup bool) {
-	node := d.GetMockNode(id, newGroup)
+func (d *DrandTestScenario) StartDrand(nodeAddress string, catchup, newGroup bool) {
+	node := d.GetMockNode(nodeAddress, newGroup)
 	dr := node.drand
+
 	// we load it from scratch as if the operator restarted its node
 	newDrand, err := LoadDrand(dr.store, dr.opts)
 	require.NoError(d.t, err)
 	node.drand = newDrand
-	d.t.Logf("--- JUST BEFORE STARTBEACON---")
+
+	d.t.Logf("[drand] Start")
 	newDrand.StartBeacon(catchup)
-	d.t.Logf("--- JUST AFTER STARTBEACON---")
+	d.t.Logf("[drand] Started")
 }
 
 func (d *DrandTestScenario) Now() time.Time {
@@ -389,39 +393,50 @@ func (d *DrandTestScenario) AdvanceMockClock(t *testing.T, p time.Duration) {
 	t.Logf("Advance clock %s: %d", p.String(), d.Now().Unix())
 }
 
-// TestBeaconLength looks if the beacon chain on the given ids is of the
-// expected length
-func (d *DrandTestScenario) TestBeaconLength(length int, newGroup bool, ids ...string) {
+// CheckBeaconLength looks if the beacon chain on the given addresses is of the expected length
+func (d *DrandTestScenario) CheckBeaconLength(expectedLength int, newGroup bool, ids ...string) {
 	nodes := d.nodes
 	if newGroup {
 		nodes = d.resharedNodes
 	}
+
 	for _, id := range ids {
 		for _, node := range nodes {
+			var found bool
+
 			if node.addr != id {
 				continue
 			}
-			var found bool
-			for i := 0; i < 10; i++ {
+
+			retries := 10
+			for i := 0; i < retries; i++ {
 				inst := node.drand
-				if length != inst.beacon.Store().Len() {
-					time.Sleep(getSleepDuration())
-					continue
+
+				beaconLength := inst.beacon.Store().Len()
+				d.t.Logf("[beacon] length=%d retry=%d", beaconLength, i)
+
+				if expectedLength == beaconLength {
+					found = true
+					break
 				}
-				found = true
-				break
+
+				// TODO: Why a sleep here?
+				time.Sleep(getSleepDuration())
 			}
+
 			require.True(d.t, found, "node %d not have enough beacon", id)
 		}
 	}
 }
 
-// TestPublicBeacon looks if we can get the latest beacon on this node
-func (d *DrandTestScenario) TestPublicBeacon(id string, newGroup bool) *drand.PublicRandResponse {
-	node := d.GetMockNode(id, newGroup)
+// CheckPublicBeacon looks if we can get the latest beacon on this node
+func (d *DrandTestScenario) CheckPublicBeacon(nodeAddress string, newGroup bool) *drand.PublicRandResponse {
+	node := d.GetMockNode(nodeAddress, newGroup)
 	dr := node.drand
+
 	client := net.NewGrpcClientFromCertManager(dr.opts.certmanager, dr.opts.grpcOpts...)
 	resp, err := client.PublicRand(context.TODO(), test.NewTLSPeer(dr.priv.Public.Addr), &drand.PublicRandRequest{})
+
 	require.NoError(d.t, err)
 	require.NotNil(d.t, resp)
 	return resp
