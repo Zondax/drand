@@ -136,7 +136,8 @@ func BatchNewDrand(t *testing.T, n int, insecure bool, opts ...ConfigOption) (
 		// add options in last so it overwrites the default
 		confOptions = append(confOptions, opts...)
 
-		t.Logf("create drand %d", i)
+		t.Logf("Create drand %d", i)
+
 		drands[i], err = NewDrand(s, NewConfig(confOptions...))
 		assert.NoError(t, err)
 	}
@@ -364,17 +365,19 @@ func (d *DrandTestScenario) Now() time.Time {
 
 // SetMockClock sets the clock of all drands to the designated unix timestamp in
 // seconds
-func (d *DrandTestScenario) SetMockClock(targetUnixTime int64) {
+func (d *DrandTestScenario) SetMockClock(t *testing.T, targetUnixTime int64) {
 	now := d.Now().Unix()
 	if now < targetUnixTime {
-		d.AdvanceMockClock(time.Duration(targetUnixTime-now) * time.Second)
+		d.AdvanceMockClock(t, time.Duration(targetUnixTime-now)*time.Second)
 	} else {
 		d.t.Logf("ALREADY PASSED")
 	}
+
+	t.Logf("Set genesis time: %d", d.Now().Unix())
 }
 
 // AdvanceMockClock advances the clock of all drand by the given duration
-func (d *DrandTestScenario) AdvanceMockClock(p time.Duration) {
+func (d *DrandTestScenario) AdvanceMockClock(t *testing.T, p time.Duration) {
 	for _, node := range d.nodes {
 		node.clock.Advance(p)
 	}
@@ -382,6 +385,8 @@ func (d *DrandTestScenario) AdvanceMockClock(p time.Duration) {
 		node.clock.Advance(p)
 	}
 	d.clock.Advance(p)
+
+	t.Logf("Advance clock %s: %d", p.String(), d.Now().Unix())
 }
 
 // TestBeaconLength looks if the beacon chain on the given ids is of the
@@ -491,6 +496,7 @@ func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan e
 // It sets the given threshold to the group.
 // It stops the nodes excluded first.
 func (d *DrandTestScenario) RunReshare(
+	t *testing.T,
 	oldRun, newRun, newThr int,
 	timeout time.Duration,
 	force, onlyLeader bool,
@@ -572,7 +578,7 @@ func (d *DrandTestScenario) RunReshare(
 				return nil, err
 			}
 		case <-time.After(500 * time.Millisecond):
-			d.AdvanceMockClock(d.period)
+			d.AdvanceMockClock(t, d.period)
 		}
 	}
 }
