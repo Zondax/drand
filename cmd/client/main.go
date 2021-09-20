@@ -174,7 +174,7 @@ func (b *prometheusBridge) pushLoop() {
 	for {
 		time.Sleep(time.Second * time.Duration(b.pushIntervalSec))
 		if err := b.pusher.Push(); err != nil {
-			log.DefaultLogger().Info("client_metrics", "prometheus gateway push (%v)", err)
+			log.DefaultLogger().Info("client_metrics=prometheus gateway push ", err)
 		}
 	}
 }

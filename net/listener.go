@@ -22,7 +22,7 @@ var state sync.Mutex
 
 func registerGRPCMetrics() error {
 	if err := metrics.PrivateMetrics.Register(grpc_prometheus.DefaultServerMetrics); err != nil {
-		log.DefaultLogger().Warn("grpc Listener", "failed metrics registration", "err", err)
+		log.DefaultLogger().Warn("grpc Listener=failed metrics registration err=", err)
 		return err
 	}
 
@@ -171,10 +171,10 @@ func (g *restListener) Start() {
 
 func (g *restListener) Stop(ctx context.Context) {
 	if err := g.lis.Close(); err != nil {
-		log.DefaultLogger().Debug("grpc listener", "grpc shutdown", "err", err)
+		log.DefaultLogger().Debug("grpc listener=grpc shutdown err=", err)
 	}
 	if err := g.restServer.Shutdown(ctx); err != nil {
-		log.DefaultLogger().Debug("grpc listener", "http shutdown", "err", err)
+		log.DefaultLogger().Debug("grpc listener=http shutdown err=", err)
 	}
 }
 

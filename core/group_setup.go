@@ -151,16 +151,16 @@ func (s *setupManager) ReceivedKey(addr string, p *drand.SignalDKGPacket) error 
 
 	newID, err := key.IdentityFromProto(p.GetNode())
 	if err != nil {
-		s.l.Info("setup", "error_decoding", "id", addr, "err", err)
+		s.l.Info("setup=error_decoding id=", addr, " err=", err)
 		return fmt.Errorf("invalid id: %v", err)
 	}
 
 	if err := newID.ValidSignature(); err != nil {
-		s.l.Info("setup", "invalid_sig", "id", addr, "err", err)
+		s.l.Info("setup=invalid_sig id=", addr, " err=", err)
 		return fmt.Errorf("invalid sig: %s", err)
 	}
 
-	s.l.Debug("setup", "received_new_key", "id", newID.String())
+	s.l.Debug("setup=received_new_key id=", newID.String())
 
 	s.pushKeyCh <- pushKey{
 		addr: addr,
@@ -181,11 +181,11 @@ func (s *setupManager) run() {
 			for _, id := range inKeys {
 				if id.Address() == pk.id.Address() {
 					found = true
-					s.l.Debug("setup", "duplicate", "ip", pk.addr, "addr", pk.id.String())
+					s.l.Debug("setup=duplicate ip=", pk.addr, " addr=", pk.id.String())
 					break
 				} else if id.Key.Equal(pk.id.Key) {
 					found = true
-					s.l.Debug("setup", "duplicate", "ip", pk.addr, "addr", pk.id.String())
+					s.l.Debug("setup=duplicate ip=", pk.addr, " addr=", pk.id.String())
 					break
 				}
 			}
@@ -194,7 +194,7 @@ func (s *setupManager) run() {
 				break
 			}
 			inKeys = append(inKeys, pk.id)
-			s.l.Debug("setup", "added", "key", pk.id.String(), "have", fmt.Sprintf("%d/%d", len(inKeys), s.expected))
+			s.l.Debug("setup=added  key=", pk.id.String(), " have=", fmt.Sprintf("%d/%d", len(inKeys), s.expected))
 
 			// create group if we have enough keys
 			if len(inKeys) == s.expected {
@@ -209,7 +209,7 @@ func (s *setupManager) run() {
 				}
 			}
 		case <-s.doneCh:
-			s.l.Debug("setup", "preempted", "collected_keys", len(inKeys))
+			s.l.Debug("setup=preempted  collected_keys=", len(inKeys))
 			return
 		}
 	}
@@ -235,7 +235,7 @@ func (s *setupManager) createAndSend(keys []*key.Identity) {
 		group.TransitionTime = transition
 		group.GenesisSeed = s.oldGroup.GetGenesisSeed()
 	}
-	s.l.Debug("setup", "created_group")
+	s.l.Debug("setup=created_group")
 	fmt.Printf("Generated group:\n%s\n", group.String())
 	// signal the leader it's ready to run the DKG
 	s.startDKG <- group
@@ -318,7 +318,7 @@ type dkgGroup struct {
 // to the routine that waits for the group to start the DKG.
 func (r *setupReceiver) PushDKGInfo(pg *drand.DKGInfoPacket) error {
 	if !correctSecret(r.secret, pg.GetSecretProof()) {
-		r.l.Debug("received", "invalid_secret_proof")
+		r.l.Debug("received=invalid_secret_proof")
 		return errors.New("invalid secret")
 	}
 	// verify things are all in order
@@ -327,7 +327,7 @@ func (r *setupReceiver) PushDKGInfo(pg *drand.DKGInfoPacket) error {
 		return fmt.Errorf("group from leader invalid: %s", err)
 	}
 	if err := key.DKGAuthScheme.Verify(r.leaderID.Key, group.Hash(), pg.Signature); err != nil {
-		r.l.Error("received", "group", "invalid_sig", err)
+		r.l.Error("received=group invalid_sig=", err)
 		return fmt.Errorf("invalid group sig: %s", err)
 	}
 	checkGroup(r.l, group)
@@ -344,10 +344,10 @@ func (r *setupReceiver) WaitDKGInfo(ctx context.Context) (*key.Group, uint32, er
 		if dkgGroup == nil {
 			return nil, 0, errors.New("unable to fetch group")
 		}
-		r.l.Debug("init_dkg", "received_group")
+		r.l.Debug("init_dkg=received_group")
 		return dkgGroup.group, dkgGroup.timeout, nil
 	case <-r.clock.After(MaxWaitPrepareDKG):
-		r.l.Error("init_dkg", "wait_group", "err", "timeout")
+		r.l.Error("init_dkg=wait_group err=timeout")
 		return nil, 0, errors.New("wait_group timeouts from coordinator")
 	case <-ctx.Done():
 		return nil, 0, ctx.Err()

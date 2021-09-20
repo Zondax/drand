@@ -26,15 +26,12 @@ const (
 	LogWarn  = int(zapcore.WarnLevel)
 )
 
-const logStackDepth = 6
-
 // DefaultLevel is the default level where statements are logged. Change the
 // value of this variable before init() to change the level of the default
 // logger.
-var DefaultLevel = LogInfo
+const DefaultLevel = LogInfo
 
 var defaultLogger Logger
-
 var defaultLoggerSet sync.Once
 
 // SetDefaultLogger updates the default logger to wrap a provided kit logger.

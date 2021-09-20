@@ -117,7 +117,7 @@ func ConstructHost(ds datastore.Datastore, priv crypto.PrivKey, listenAddr strin
 			err := h.Connect(ctx, ai)
 			cancel()
 			if err != nil {
-				log.Warn("construct_host", "could not bootstrap", "addr", ai)
+				log.Warn("construct_host=could not bootstrap addr=", ai)
 			}
 		}
 	}()
@@ -139,7 +139,7 @@ func LoadOrCreatePrivKey(identityPath string, log dlog.Logger) (crypto.PrivKey, 
 		if err != nil {
 			return nil, xerrors.Errorf("unmarshaling ed25519 key: %w", err)
 		}
-		log.Info("load_or_create_priv_key", "loaded private key")
+		log.Info("load_or_create_priv_key=loaded private key")
 
 	case xerrors.Is(err, os.ErrNotExist):
 		priv, _, err = crypto.GenerateEd25519Key(rand.Reader)
