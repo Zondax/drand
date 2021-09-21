@@ -50,8 +50,6 @@ func TestRunDKG(t *testing.T) {
 	assert.Equal(t, time.Duration(0), group.CatchupPeriod)
 	assert.Equal(t, n, len(group.Nodes))
 	assert.Equal(t, int64(449884810), group.GenesisTime)
-
-	t.Log("DKG FINISHED")
 }
 
 // Test dkg for a large quantity of nodes
@@ -75,8 +73,6 @@ func TestRunDKGLarge(t *testing.T) {
 	assert.Equal(t, time.Duration(0), group.CatchupPeriod)
 	assert.Equal(t, n, len(group.Nodes))
 	assert.Equal(t, int64(449884810), group.GenesisTime)
-
-	t.Log("DKG FINISHED")
 }
 
 // Test ??????????????????????
@@ -121,8 +117,9 @@ func TestDrandDKGFresh(t *testing.T) {
 	assert.Equal(t, uint64(2), response.Round)
 }
 
-// Test ??????????????????????
-func TestDrandDKGBroadcastDeny(t *testing.T) {
+// Test dkg when two nodes cannot broadcast messages between them. The rest of the nodes
+// will be able to broadcast messages, so the process should finish successfully
+func TestRunDKGBroadcastDeny(t *testing.T) {
 	n := 4
 	thr := 3
 	beaconPeriod := 1 * time.Second
@@ -131,23 +128,27 @@ func TestDrandDKGBroadcastDeny(t *testing.T) {
 	defer dt.Cleanup()
 
 	// close connection between a pair of nodes
-	n1 := dt.nodes[1]
-	n2 := dt.nodes[2]
-	n1.drand.DenyBroadcastTo(n2.addr)
-	n2.drand.DenyBroadcastTo(n1.addr)
+	node_1 := dt.nodes[1]
+	node_2 := dt.nodes[2]
+
+	t.Log("Setting node 1 not to broadcast messages to the node 2")
+	node_1.drand.DenyBroadcastTo(t, node_2.addr)
+
+	t.Log("Setting node 2 not to broadcast messages to the node 1")
+	node_2.drand.DenyBroadcastTo(t, node_1.addr)
+
 	group1 := dt.RunDKG()
 	dt.SetMockClock(t, group1.GenesisTime)
 	dt.AdvanceMockClock(t, 1*time.Second)
-	t.Log("DKG FINISHED")
-
 	time.Sleep(200 * time.Millisecond)
+
 	_, err := dt.RunReshare(t, n, 0, thr, 1*time.Second, false, false)
 	require.NoError(t, err)
-	t.Log("RESHARING FINISHED")
 }
 
-// Test ??????????????????????
-func TestDrandReshareForce(t *testing.T) {
+// Test the dkg reshare can be forced to restart and finish successfully
+// when another dkg reshare was running before
+func TestRunDKGReshareForce(t *testing.T) {
 	oldN := 4
 	oldThr := 3
 	timeout := 1 * time.Second
@@ -175,6 +176,7 @@ func TestDrandReshareForce(t *testing.T) {
 	}()
 	reshareWg.Wait()
 
+	// TODO: check the previous reshare was running when forcing a new reshare
 	// force
 	t.Log("[reshare] Start again!")
 	group3, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, true, false)
@@ -186,110 +188,114 @@ func TestDrandReshareForce(t *testing.T) {
 
 // This tests when a node first signal his intention to participate into a
 // resharing but is down right after  - he shouldn't be in the final group
-func TestDrandDKGReshareAbsent(t *testing.T) {
-	oldN := 3
-	newN := 4
-	oldThr := 2
-	newThr := 3
-	timeout := 1 * time.Second
-	beaconPeriod := 2 * time.Second
+func TestRunDKGReshareAbsentNode(t *testing.T) {
+	oldNodes, newNodes := 3, 4
+	oldThreshold, newThreshold := 2, 3
+	timeout, beaconPeriod := 1*time.Second, 2*time.Second
 
-	dt := NewDrandTestScenario(t, oldN, oldThr, beaconPeriod)
+	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod)
 	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
-	// make sure all nodes had enough time to run their go routines to start the
-	// beacon handler - related to CI problems
+
+	// TODO: make sure all nodes had enough time to run their go routines to start the beacon handler - related to CI problems
 	time.Sleep(getSleepDuration())
 	dt.SetMockClock(t, group1.GenesisTime)
+
 	// move to genesis time - so nodes start to make a round
 	// dt.AdvanceMockClock(t,offsetGenesis)
 	// two = genesis + 1st round (happens at genesis)
-	dt.CheckBeaconLength(2, false, dt.Ids(oldN, false)...)
+
+	t.Log("Check Beacon Length")
+	dt.CheckBeaconLength(2, false, dt.Ids(newNodes, false)...)
+
 	// so nodes think they are going forward with round 2
 	dt.AdvanceMockClock(t, 1*time.Second)
 
-	toAdd := newN - oldN
-	dt.SetupNewNodes(toAdd)
+	t.Log("Adding new nodes to the group")
+	nodesToAdd := newNodes - oldNodes
+	dt.SetupNewNodes(nodesToAdd)
+
 	// we want to stop one node right after the group is created
 	nodeToStop := 1
 	leader := 0
 
+	t.Log("Stopping nodes\n")
 	dt.nodes[leader].drand.setupCB = func(g *key.Group) {
-		t.Log("STOPPING NODE 1")
+		t.Logf("Stopping node %d \n", nodeToStop)
 		dt.nodes[nodeToStop].drand.Stop(context.Background())
-		t.Log("STOPPING NODE 1 DONE")
+		t.Logf("Node %d stopped \n", nodeToStop)
 	}
 
-	t.Log("SETUP RESHARE DONE")
-	newGroup, err := dt.RunReshare(t, oldN, toAdd, newThr, timeout, false, false, true)
+	t.Log("Setup reshare done. Starting reshare... Ignoring reshare errors")
+	newGroup, err := dt.RunReshare(t, oldNodes, nodesToAdd, newThreshold, timeout, false, false, true)
 	require.NoError(t, err)
 	require.NotNil(t, newGroup)
 
 	// the node that had stopped must not be in the group
+	t.Logf("Check node %d is not included in the group \n", nodeToStop)
 	missingPublic := dt.nodes[nodeToStop].drand.priv.Public
 	require.Nil(t, newGroup.Find(missingPublic), "missing public is found", missingPublic)
 }
 
 // Test ??????????????????????
-func TestDrandDKGReshareTimeout(t *testing.T) {
-	oldN := 3
-	newN := 4
-	oldThr := 2
-	newThr := 3
-	timeout := 1 * time.Second
-	beaconPeriod := 2 * time.Second
+func TestRunDKGReshareTimeout(t *testing.T) {
+	oldNodes, newNodes := 3, 4
+	oldThreshold, newThreshold := 2, 3
+	timeout, beaconPeriod := 1*time.Second, 2*time.Second
 	offline := 1
 
-	dt := NewDrandTestScenario(t, oldN, oldThr, beaconPeriod)
+	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod)
 	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
-	// make sure all nodes had enough time to run their go routines to start the
-	// beacon handler - related to CI problems
+	// TODO: make sure all nodes had enough time to run their go routines to start the beacon handler - related to CI problems
 	time.Sleep(getSleepDuration())
 	dt.SetMockClock(t, group1.GenesisTime)
+
 	// move to genesis time - so nodes start to make a round
 	// dt.AdvanceMockClock(t,offsetGenesis)
 	// two = genesis + 1st round (happens at genesis)
-	dt.CheckBeaconLength(2, false, dt.Ids(oldN, false)...)
+
+	t.Log("Check Beacon Length")
+	dt.CheckBeaconLength(2, false, dt.Ids(oldNodes, false)...)
+
 	// so nodes think they are going forward with round 2
 	dt.AdvanceMockClock(t, 1*time.Second)
 
 	// + offline makes sure t
-	toKeep := oldN - offline
-	toAdd := newN - toKeep
-	dt.SetupNewNodes(toAdd)
+	nodesToKeep := oldNodes - offline
+	nodesToAdd := newNodes - nodesToKeep
+	dt.SetupNewNodes(nodesToAdd)
 
-	t.Log("SETUP RESHARE DONE")
+	t.Log("Setup reshare done. Starting reshare.")
 
 	// run the resharing
 	var doneReshare = make(chan *key.Group)
 	go func() {
 		t.Log("[reshare] Start reshare")
-		group, err := dt.RunReshare(t, toKeep, toAdd, newThr, timeout, false, false)
+		group, err := dt.RunReshare(t, nodesToKeep, nodesToAdd, newThreshold, timeout, false, false)
 		require.NoError(t, err)
 		doneReshare <- group
 	}()
 	time.Sleep(3 * time.Second)
 
-	t.Log("MOVE TO RESPONSE PHASE")
+	t.Log("Move to response phase")
 	dt.AdvanceMockClock(t, timeout)
-	// at this point in time, nodes should have gotten all deals and send back
-	// their responses to all nodes
+	// at this point in time, nodes should have gotten all deals and send back their responses to all nodes
 	time.Sleep(getSleepDuration())
 
-	t.Log("MOVE TO JUSTIFICATION PHASE")
+	t.Log("Move to justification phase")
 	dt.AdvanceMockClock(t, timeout)
 	// at this time, all nodes received the responses of each other nodes but
 	// there is one node missing so they expect justifications
 	time.Sleep(getSleepDuration())
 
-	t.Log("MOVE TO FINISH PHASE")
+	t.Log("Move to finish phase")
 	dt.AdvanceMockClock(t, timeout)
 	time.Sleep(getSleepDuration())
 	// at this time they received no justification from the missing node so he's
-	// exlucded of the group and the dkg should finish
+	// excluded of the group and the dkg should finish
 	// time.Sleep(10 * time.Second)
 
 	var resharedGroup *key.Group
@@ -299,28 +305,37 @@ func TestDrandDKGReshareTimeout(t *testing.T) {
 		require.True(t, false)
 	}
 
-	t.Logf("RESHARED GROUP: %s", resharedGroup)
-	target := resharedGroup.TransitionTime
+	t.Logf("[reshare] Group: %s", resharedGroup)
+
+	transitionTime := resharedGroup.TransitionTime
 	now := dt.Now().Unix()
+
 	// get rounds from first node in the "old" group - since he's the leader for
 	// the new group, he's alive
+	t.Log("Check Beacon Public on Leader")
 	lastBeacon := dt.CheckPublicBeacon(dt.Ids(1, false)[0], false)
+
 	// move to the transition time period by period - do not skip potential
 	// periods as to emulate the normal time behavior
-	for now < target-1 {
+	for now < transitionTime-1 {
 		dt.AdvanceMockClock(t, beaconPeriod)
+
+		t.Log("Check Beacon Public on Leader")
 		lastBeacon = dt.CheckPublicBeacon(dt.Ids(1, false)[0], false)
 		now = dt.Now().Unix()
 	}
+
 	// move to the transition time
 	dt.SetMockClock(t, resharedGroup.TransitionTime)
 	time.Sleep(getSleepDuration())
+
 	// test that all nodes in the new group have generated a new beacon
-	dt.CheckBeaconLength(int(lastBeacon.Round+1), true, dt.Ids(newN, true)...)
+	t.Log("Check Beacon Length")
+	dt.CheckBeaconLength(int(lastBeacon.Round+1), true, dt.Ids(newNodes, true)...)
 }
 
 // Test ??????????????????????
-func TestDrandResharePreempt(t *testing.T) {
+func TestRunDKGResharePreempt(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping testing in CI environment")
 	}
@@ -335,12 +350,15 @@ func TestDrandResharePreempt(t *testing.T) {
 	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
-	// make sure all nodes had enough time to run their go routines to start the
-	// beacon handler - related to CI problems
+
+	// TODO: make sure all nodes had enough time to run their go routines to start the beacon handler - related to CI problems
 	time.Sleep(getSleepDuration())
 	dt.SetMockClock(t, group1.GenesisTime)
+
 	// move to genesis time - so nodes start to make a round
+	t.Log("Check Beacon Length")
 	dt.CheckBeaconLength(2, false, dt.Ids(oldN, false)...)
+
 	// so nodes think they are going forward with round 2
 	dt.AdvanceMockClock(t, 1*time.Second)
 
@@ -355,7 +373,10 @@ func TestDrandResharePreempt(t *testing.T) {
 	go func() {
 		client, err := net.NewControlClient(dt.nodes[0].drand.opts.controlPort)
 		require.NoError(t, err)
+
+		t.Log("Init reshare on leader")
 		_, err = client.InitReshareLeader(newN, Thr, timeout, 0, "unused secret", "", testBeaconOffset)
+
 		// Done resharing
 		if err == nil {
 			panic("initial reshare should fail.")
@@ -372,22 +393,23 @@ func TestDrandResharePreempt(t *testing.T) {
 		doneReshare <- g
 	}()
 	time.Sleep(time.Second)
+
 	dt.AdvanceMockClock(t, time.Second)
 	time.Sleep(time.Second)
 
-	t.Log("MOVE TO RESPONSE PHASE")
+	t.Log("Move to response phase")
 	dt.AdvanceMockClock(t, timeout)
 	// at this point in time, nodes should have gotten all deals and send back
 	// their responses to all nodes
 	time.Sleep(getSleepDuration())
 
-	t.Log("MOVE TO JUSTIFICATION PHASE")
+	t.Log("Move to justification phase")
 	dt.AdvanceMockClock(t, timeout)
 	// at this time, all nodes received the responses of each other nodes but
 	// there is one node missing so they expect justifications
 	time.Sleep(getSleepDuration())
 
-	t.Log("MOVE TO FINISH PHASE")
+	t.Log("Move to finish phase")
 	dt.AdvanceMockClock(t, timeout)
 	time.Sleep(getSleepDuration())
 
@@ -403,6 +425,8 @@ func TestDrandResharePreempt(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		panic("expect aborted dkg to fail")
 	}
+
+	t.Log("Check Beacon Public")
 	dt.CheckPublicBeacon(dt.Ids(1, false)[0], false)
 }
 

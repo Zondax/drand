@@ -510,16 +510,18 @@ func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan e
 // running, and "newRun" new nodes running (the ones created via SetupNewNodes).
 // It sets the given threshold to the group.
 // It stops the nodes excluded first.
-func (d *DrandTestScenario) RunReshare(
-	t *testing.T,
+func (d *DrandTestScenario) RunReshare(t *testing.T,
 	oldRun, newRun, newThr int,
 	timeout time.Duration,
 	force, onlyLeader bool,
 	ignoreErrs ...bool) (*key.Group, error) {
+
+	d.t.Logf("[reshare] Start")
+
 	var ignoreErr bool
 	if len(ignoreErrs) > 0 {
 		// TODO: When is this happening?
-		d.t.Log("[WARNING] IGNORING ERRORS!!!")
+		d.t.Log("[reshare] WARNING --> Reshare process will ignore errors.")
 		ignoreErr = true
 	}
 
@@ -583,30 +585,38 @@ func (d *DrandTestScenario) RunReshare(
 	// wait for the return of the clients
 	for {
 		select {
+
 		case finalGroup := <-groupCh:
 			d.newGroup = finalGroup
 			require.NoError(d.t, key.Save(d.groupPath, d.newGroup, false))
+			d.t.Logf("[reshare] Finish")
 			return finalGroup, nil
+
 		case err := <-errCh:
 			d.t.Logf("[reshare] ERROR: %s", err)
 			if !ignoreErr {
+				d.t.Logf("[reshare] Finish")
 				return nil, err
 			}
+
 		case <-time.After(500 * time.Millisecond):
 			d.AdvanceMockClock(t, d.period)
+
 		}
 	}
 }
 
 // DenyClient can abort request to other needs based on a peer list
 type DenyClient struct {
+	t *testing.T
 	net.ProtocolClient
 	deny []string
 }
 
-func (d *Drand) DenyBroadcastTo(addrs ...string) {
+func (d *Drand) DenyBroadcastTo(t *testing.T, addrs ...string) {
 	client := d.privGateway.ProtocolClient
 	d.privGateway.ProtocolClient = &DenyClient{
+		t:              t,
 		ProtocolClient: client,
 		deny:           addrs,
 	}
@@ -614,9 +624,10 @@ func (d *Drand) DenyBroadcastTo(addrs ...string) {
 
 func (d *DenyClient) BroadcastDKG(c context.Context, p net.Peer, in *drand.DKGPacket, opts ...net.CallOption) error {
 	if !d.isAllowed(p) {
-		fmt.Printf("DENIAL BROADCAST DKG TO %s\n", p.Address())
+		d.t.Logf("[broadcastDKG] denial broadcast DKG to %s\n", p.Address())
 		return errors.New("dkg broadcast denied")
 	}
+
 	return d.ProtocolClient.BroadcastDKG(c, p, in)
 }
 
