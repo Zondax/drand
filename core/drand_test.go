@@ -440,30 +440,40 @@ func TestDrandPublicChainInfo(t *testing.T) {
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
-	ci := chain.NewChainInfo(group)
-	cm := dt.nodes[0].drand.opts.certmanager
-	client := NewGrpcClientFromCert(cm)
 
-	for _, node := range dt.nodes {
+	chainInfo := chain.NewChainInfo(group)
+	certManager := dt.nodes[0].drand.opts.certmanager
+	client := NewGrpcClientFromCert(certManager)
+
+	for i, node := range dt.nodes {
 		d := node.drand
+		t.Logf("Getting chaing info from node %d \n", i)
 		received, err := client.ChainInfo(d.priv.Public)
+
 		require.NoError(t, err, fmt.Sprintf("addr %s", node.addr))
-		require.True(t, ci.Equal(received))
+
+		t.Logf("Check Node %d has the same chain info \n", i)
+		require.True(t, chainInfo.Equal(received))
 	}
 
-	for _, node := range dt.nodes {
+	for i, node := range dt.nodes {
 		var found bool
 		addr := node.addr
 		public := node.drand.priv.Public
+
+		// Looking for node i inside the group file
 		for _, n := range group.Nodes {
 			sameAddr := n.Address() == addr
 			sameKey := n.Key.Equal(public.Key)
 			sameTLS := n.IsTLS() == public.TLS
+
 			if sameAddr && sameKey && sameTLS {
 				found = true
 				break
 			}
 		}
+
+		t.Logf("Check if node %d is present on the group with the correct configuration \n", i)
 		require.True(t, found)
 	}
 
@@ -475,8 +485,7 @@ func TestDrandPublicChainInfo(t *testing.T) {
 	// require.True(t, group.Equal(received))
 }
 
-// Test if the we can correctly fetch the rounds after a DKG using the
-// PublicRand RPC call
+// Test if we can correctly fetch the rounds after a DKG using the PublicRand RPC call
 func TestDrandPublicRand(t *testing.T) {
 	n := 4
 	thr := key.DefaultThreshold(n)
@@ -487,6 +496,7 @@ func TestDrandPublicRand(t *testing.T) {
 
 	group := dt.RunDKG()
 	time.Sleep(getSleepDuration())
+
 	root := dt.nodes[0].drand
 	rootID := root.priv.Public
 
@@ -503,19 +513,26 @@ func TestDrandPublicRand(t *testing.T) {
 	defer cancel()
 
 	// get last round first
+	t.Log("Getting the last round first")
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
 	require.NoError(t, err)
 
+	// get next rounds
 	initRound := resp.Round + 1
 	max := initRound + 4
 	for i := initRound; i < max; i++ {
+		t.Log("Move clock to generate a new round")
 		dt.AdvanceMockClock(t, group.Period)
+
 		req := new(drand.PublicRandRequest)
 		req.Round = i
+
+		t.Logf("Getting the actual rand \n")
 		resp, err := client.PublicRand(ctx, rootID, req)
 		require.NoError(t, err)
+
+		t.Logf("Checking if the round we got (%d) is the expected one (%d) \n", resp.Round, i)
 		require.Equal(t, i, resp.Round)
-		t.Logf("REQUEST ROUND %d GOT ROUND %d", i, resp.Round)
 	}
 }
 
@@ -533,6 +550,7 @@ func TestDrandPublicStream(t *testing.T) {
 
 	group := dt.RunDKG()
 	time.Sleep(getSleepDuration())
+
 	root := dt.nodes[0]
 	rootID := root.drand.priv.Public
 
@@ -549,6 +567,7 @@ func TestDrandPublicStream(t *testing.T) {
 	defer cancel()
 
 	// get last round first
+	t.Log("Getting the last round first with PublicRand method")
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
 	require.NoError(t, err)
 
@@ -558,12 +577,17 @@ func TestDrandPublicStream(t *testing.T) {
 	require.NoError(t, err)
 
 	// expect first round now since node already has it
+	t.Log("Waiting to receive the first round as the node should have it now...")
 	select {
 	case beacon := <-respCh:
+		t.Logf("First round rcv %d \n", resp.GetRound())
 		require.Equal(t, beacon.GetRound(), resp.GetRound())
+
 	case <-time.After(100 * time.Millisecond):
-		require.True(t, false, "too late")
+		t.Logf("First round NOT rcv. Timeout has passed \n")
+		require.True(t, false, "too late for the first round, it didn't reply in time")
 	}
+
 	nTry := 4
 	// we expect the next one now
 	initRound := resp.Round + 1
@@ -577,16 +601,21 @@ func TestDrandPublicStream(t *testing.T) {
 		case beacon := <-respCh:
 			require.Equal(t, beacon.GetRound(), round)
 		case <-time.After(1 * time.Second):
-			require.True(t, false, "too late for streaming, round %d didn't reply in time", round)
+			t.Logf("Round %d NOT rcv. Timeout has passed \n", round)
+			require.True(t, false, fmt.Sprintf("too late for streaming, round %d didn't reply in time", round))
 		}
 	}
 
 	// try fetching with round 0 -> get latest
+	t.Logf("Streaming for rounds starting from %d to %d", 0, maxRound)
+
 	respCh, err = client.PublicRandStream(ctx, root.drand.priv.Public, new(drand.PublicRandRequest))
 	require.NoError(t, err)
+
 	select {
 	case <-respCh:
-		require.False(t, true, "shouldn't get an entry if time doesn't go by")
+		require.False(t, true, "shouldn't get a round if time doesn't go by")
+
 	case <-time.After(50 * time.Millisecond):
 		// correct
 	}
@@ -594,7 +623,9 @@ func TestDrandPublicStream(t *testing.T) {
 	dt.AdvanceMockClock(t, group.Period)
 	select {
 	case resp := <-respCh:
+		t.Logf("Round %d rcv \n", maxRound)
 		require.Equal(t, maxRound, resp.GetRound())
+
 	case <-time.After(50 * time.Millisecond):
 		// correct
 	}
@@ -609,9 +640,11 @@ func TestDrandFollowChain(tt *testing.T) {
 
 	group := dt.RunDKG()
 	time.Sleep(getSleepDuration())
+
 	rootID := dt.nodes[0].drand.priv.Public
 
 	dt.SetMockClock(tt, group.GenesisTime)
+
 	// do a few periods
 	for i := 0; i < 6; i++ {
 		dt.AdvanceMockClock(tt, group.Period)
@@ -630,37 +663,48 @@ func TestDrandFollowChain(tt *testing.T) {
 	newNode := dt.SetupNewNodes(1)[0]
 	newClient, err := net.NewControlClient(newNode.drand.opts.controlPort)
 	require.NoError(tt, err)
+
 	addrToFollow := []string{rootID.Address()}
 	hash := fmt.Sprintf("%x", chain.NewChainInfo(group).Hash())
 	tls := true
 
 	// First try with an invalid hash info
+	tt.Logf("Trying to follow with an invalid address\n")
+
 	ctx, cancel = context.WithCancel(context.Background())
 	_, errCh, _ := newClient.StartFollowChain(ctx, "deadbeef", addrToFollow, tls, 10000)
 
 	select {
 	case <-errCh:
+		tt.Logf("An error was received as the address is invalid")
 	case <-time.After(100 * time.Millisecond):
+		tt.Logf("An error should have been received as the address is invalid")
 		panic("should have errored")
 	}
+
 	_, errCh, _ = newClient.StartFollowChain(ctx, "tutu", addrToFollow, tls, 10000)
 	select {
 	case <-errCh:
+		tt.Logf("An error was received as the address is invalid")
 	case <-time.After(100 * time.Millisecond):
+		tt.Logf("An error should have been received as the address is invalid")
 		panic("should have errored")
 	}
 
 	fn := func(upTo, exp uint64) {
 		ctx, cancel = context.WithCancel(context.Background())
+
+		tt.Logf("Starting to follow chain with a valid address\n")
 		progress, errCh, err := newClient.StartFollowChain(ctx, hash, addrToFollow, tls, upTo)
 		require.NoError(tt, err)
+
 		var goon = true
 		for goon {
 			select {
 			case p, ok := <-progress:
 				if ok && p.Current == exp {
 					// success
-					tt.Logf("SUCCESSFUL BEACON RCV. ROUND: %d. KEEP FOLLOWING CHAIN.", exp)
+					tt.Logf("Successfull beacion rcv. Round: %d. Keep following chain.", exp)
 					goon = false
 					break
 				}
@@ -673,6 +717,7 @@ func TestDrandFollowChain(tt *testing.T) {
 				tt.FailNow()
 			}
 		}
+
 		// cancel the operation
 		cancel()
 
@@ -685,6 +730,7 @@ func TestDrandFollowChain(tt *testing.T) {
 		require.NoError(tt, err)
 		require.Equal(tt, exp, lastB.Round, "found %d vs expected %d", lastB.Round, exp)
 	}
+
 	fn(resp.GetRound()-2, resp.GetRound()-2)
 	time.Sleep(200 * time.Millisecond)
 	fn(0, resp.GetRound())
@@ -720,6 +766,7 @@ func TestDrandPublicStreamProxy(t *testing.T) {
 
 	//  run streaming and expect responses
 	rc := client.Watch(ctx)
+
 	// expect first round now since node already has it
 	dt.AdvanceMockClock(t, group.Period)
 	beacon, ok := <-rc
@@ -736,6 +783,7 @@ func TestDrandPublicStreamProxy(t *testing.T) {
 		// move time to next period
 		dt.AdvanceMockClock(t, group.Period)
 		beacon, ok = <-rc
+
 		require.True(t, ok)
 		require.Equal(t, round, beacon.Round())
 	}
