@@ -509,15 +509,21 @@ func TestDrandPublicRand(t *testing.T) {
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
-	time.Sleep(getSleepDuration())
 
 	root := dt.nodes[0].drand
 	rootID := root.priv.Public
 
 	dt.SetMockClock(t, group.GenesisTime)
+
+	err := dt.WaitUntilRound(t,dt.nodes[0], 1)
+	require.NoError(t, err)
+
 	// do a few periods
 	for i := 0; i < 3; i++ {
 		dt.AdvanceMockClock(t, group.Period)
+
+		err = dt.WaitUntilRound(t, dt.nodes[0],uint64(i+2))
+		require.NoError(t, err)
 	}
 
 	cm := root.opts.certmanager
@@ -535,13 +541,16 @@ func TestDrandPublicRand(t *testing.T) {
 	initRound := resp.Round + 1
 	max := initRound + 4
 	for i := initRound; i < max; i++ {
-		t.Log("Move clock to generate a new round")
+		t.Logf("Move clock to generate a new round %d \n", i)
 		dt.AdvanceMockClock(t, group.Period)
+
+		err = dt.WaitUntilRound(t,dt.nodes[0], i)
+		require.NoError(t, err)
 
 		req := new(drand.PublicRandRequest)
 		req.Round = i
 
-		t.Logf("Getting the actual rand \n")
+		t.Logf("Getting the actual rand %d \n", i)
 		resp, err := client.PublicRand(ctx, rootID, req)
 		require.NoError(t, err)
 
@@ -563,15 +572,21 @@ func TestDrandPublicStream(t *testing.T) {
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
-	time.Sleep(getSleepDuration())
 
 	root := dt.nodes[0]
 	rootID := root.drand.priv.Public
 
 	dt.SetMockClock(t, group.GenesisTime)
+
+	err := dt.WaitUntilRound(t, dt.nodes[0],1)
+	require.NoError(t, err)
+
 	// do a few periods
 	for i := 0; i < 3; i++ {
 		dt.AdvanceMockClock(t, group.Period)
+
+		err = dt.WaitUntilRound(t,dt.nodes[0], uint64(i+2))
+		require.NoError(t, err)
 	}
 
 	cm := root.drand.opts.certmanager
@@ -611,6 +626,10 @@ func TestDrandPublicStream(t *testing.T) {
 	for round := initRound; round < maxRound; round++ {
 		// move time to next period
 		dt.AdvanceMockClock(t, group.Period)
+
+		err = dt.WaitUntilRound(t,dt.nodes[0],round)
+		require.NoError(t, err)
+
 		select {
 		case beacon := <-respCh:
 			require.Equal(t, beacon.GetRound(), round)
@@ -660,9 +679,15 @@ func TestDrandFollowChain(t *testing.T) {
 
 	dt.SetMockClock(t, group.GenesisTime)
 
+	err := dt.WaitUntilRound(t, dt.nodes[0],1)
+	require.NoError(t, err)
+
 	// do a few periods
 	for i := 0; i < 6; i++ {
 		dt.AdvanceMockClock(t, group.Period)
+
+		err := dt.WaitUntilRound(t, dt.nodes[0],uint64(i+2))
+		require.NoError(t, err)
 	}
 
 	client := net.NewGrpcClientFromCertManager(dt.nodes[0].drand.opts.certmanager)
@@ -747,7 +772,6 @@ func TestDrandFollowChain(t *testing.T) {
 	}
 
 	fn(resp.GetRound()-2, resp.GetRound()-2)
-	time.Sleep(200 * time.Millisecond)
 	fn(0, resp.GetRound())
 }
 
