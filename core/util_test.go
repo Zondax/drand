@@ -27,6 +27,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	ReshareUnlock = iota
+	ReshareLock
+)
+
 type MockNode struct {
 	addr     string
 	certPath string
@@ -510,7 +515,7 @@ func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan e
 // running, and "newRun" new nodes running (the ones created via SetupNewNodes).
 // It sets the given threshold to the group.
 // It stops the nodes excluded first.
-func (d *DrandTestScenario) RunReshare(t *testing.T,
+func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	oldRun, newRun, newThr int,
 	timeout time.Duration,
 	force, onlyLeader bool,
@@ -526,6 +531,10 @@ func (d *DrandTestScenario) RunReshare(t *testing.T,
 	}
 
 	d.Lock()
+	if( stateCh != nil){
+		*stateCh <- ReshareLock
+	}
+
 	d.t.Logf("[reshare] LOCK")
 	d.t.Logf("[reshare] old: %d/%d | new: %d/%d", oldRun, len(d.nodes), newRun, len(d.newNodes))
 
@@ -581,6 +590,10 @@ func (d *DrandTestScenario) RunReshare(t *testing.T,
 
 	d.t.Logf("[reshare] UNLOCK")
 	d.Unlock()
+
+	if( stateCh != nil){
+		*stateCh <- ReshareUnlock
+	}
 
 	// wait for the return of the clients
 	for {

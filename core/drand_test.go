@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -142,7 +141,7 @@ func TestRunDKGBroadcastDeny(t *testing.T) {
 	dt.AdvanceMockClock(t, 1*time.Second)
 	time.Sleep(200 * time.Millisecond)
 
-	_, err := dt.RunReshare(t, n, 0, thr, 1*time.Second, false, false)
+	_, err := dt.RunReshare(t, nil, n, 0, thr, 1*time.Second, false, false)
 	require.NoError(t, err)
 }
 
@@ -166,20 +165,23 @@ func TestRunDKGReshareForce(t *testing.T) {
 	dt.AdvanceMockClock(t, 1*time.Second)
 
 	// run the resharing
-	var reshareWg sync.WaitGroup
-	reshareWg.Add(1)
+	stateCh := make(chan int)
 	go func() {
-		defer reshareWg.Done()
 		t.Log("[reshare] Start reshare")
-		_, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, false, true)
-		require.NoError(t, err)
+		_, err := dt.RunReshare(t, &stateCh, oldN, 0, oldThr, timeout, false, true)
+		require.Error(t, err)
 	}()
-	reshareWg.Wait()
+
+	for{
+		if state := <- stateCh; state == ReshareUnlock{
+			break
+		}
+	}
 
 	// TODO: check the previous reshare was running when forcing a new reshare
 	// force
 	t.Log("[reshare] Start again!")
-	group3, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, true, false)
+	group3, err := dt.RunReshare(t, nil, oldN, 0, oldThr, timeout, true, false)
 	require.NoError(t, err)
 
 	t.Log("[reshare] Move to response phase!")
@@ -228,7 +230,7 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 	}
 
 	t.Log("Setup reshare done. Starting reshare... Ignoring reshare errors")
-	newGroup, err := dt.RunReshare(t, oldNodes, nodesToAdd, newThreshold, timeout, false, false, true)
+	newGroup, err := dt.RunReshare(t, nil, oldNodes, nodesToAdd, newThreshold, timeout, false, false, true)
 	require.NoError(t, err)
 	require.NotNil(t, newGroup)
 
@@ -274,7 +276,7 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	var doneReshare = make(chan *key.Group)
 	go func() {
 		t.Log("[reshare] Start reshare")
-		group, err := dt.RunReshare(t, nodesToKeep, nodesToAdd, newThreshold, timeout, false, false)
+		group, err := dt.RunReshare(t, nil, nodesToKeep, nodesToAdd, newThreshold, timeout, false, false)
 		require.NoError(t, err)
 		doneReshare <- group
 	}()
@@ -388,7 +390,7 @@ func TestRunDKGResharePreempt(t *testing.T) {
 	// run the resharing
 	var doneReshare = make(chan *key.Group, 1)
 	go func() {
-		g, err := dt.RunReshare(t, oldN, 0, Thr, timeout, false, false)
+		g, err := dt.RunReshare(t, nil, oldN, 0, Thr, timeout, false, false)
 		require.NoError(t, err)
 		doneReshare <- g
 	}()
