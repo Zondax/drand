@@ -568,12 +568,15 @@ func (d *Drand) PingPong(c context.Context, in *drand.Ping) (*drand.Pong, error)
 	resp := drand.Pong{}
 
 	// Last round
-	beacon, err := d.beacon.Store().Last()
-	if( err != nil || beacon == nil){
-		resp.IsAnyRound = false;
-	} else {
-		resp.IsAnyRound = true;
-		resp.LastRound = beacon.GetRound()
+	resp.IsAnyRound = false;
+
+	if( d.beacon != nil && d.beacon.Store() != nil ){
+		beacon, err := d.beacon.Store().Last()
+
+		if( err == nil && beacon != nil){
+			resp.IsAnyRound = true;
+			resp.LastRound = beacon.GetRound()
+		}
 	}
 
 	// DKG status
