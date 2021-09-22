@@ -535,7 +535,7 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	}
 
 	d.Lock()
-	if( stateCh != nil){
+	if stateCh != nil {
 		*stateCh <- ReshareLock
 	}
 
@@ -595,7 +595,7 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	d.t.Logf("[reshare] unlock")
 	d.Unlock()
 
-	if( stateCh != nil){
+	if stateCh != nil {
 		*stateCh <- ReshareUnlock
 	}
 

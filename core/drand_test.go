@@ -150,7 +150,7 @@ func TestRunDKGBroadcastDeny(t *testing.T) {
 	dt.SetMockClock(t, group1.GenesisTime)
 	dt.AdvanceMockClock(t, 1*time.Second)
 
-	group2, err := dt.RunReshare(t, n, 0, thr, 1*time.Second, false, false, false)
+	group2, err := dt.RunReshare(t, nil, n, 0, thr, 1*time.Second, false, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, group2)
 
@@ -179,14 +179,13 @@ func TestRunDKGReshareForce(t *testing.T) {
 	// run the resharing
 	stateCh := make(chan int)
 	go func() {
-		defer reshareWg.Done()
 		t.Log("[ReshareForce] Start reshare")
-		_, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, false, true, false)
+		_, err := dt.RunReshare(t, &stateCh, oldNodes, 0, oldThreshold, timeout, false, true, false)
 		require.NoError(t, err)
 	}()
 
-	for{
-		if state := <- stateCh; state == ReshareUnlock{
+	for {
+		if state := <-stateCh; state == ReshareUnlock {
 			break
 		}
 	}
@@ -194,7 +193,7 @@ func TestRunDKGReshareForce(t *testing.T) {
 	// TODO: check the previous reshare was running when forcing a new reshare
 	// force
 	t.Log("[reshare] Start again!")
-	group3, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, true, false, false)
+	group3, err := dt.RunReshare(t, nil, oldNodes, 0, oldThreshold, timeout, true, false, false)
 	require.NoError(t, err)
 
 	t.Log("[reshare] Move to response phase!")
@@ -229,7 +228,7 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 
 	t.Log("Adding new nodes to the group")
 	nodesToAdd := newNodes - oldNodes
-	dt.SetupNewNodes(nodesToAdd)
+	dt.SetupNewNodes(t, nodesToAdd)
 
 	// we want to stop one node right after the group is created
 	nodeToStop := 1
@@ -281,7 +280,7 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	// + offline makes sure t
 	nodesToKeep := oldNodes - offline
 	nodesToAdd := newNodes - nodesToKeep
-	dt.SetupNewNodes(nodesToAdd)
+	dt.SetupNewNodes(t, nodesToAdd)
 
 	t.Log("Setup reshare done. Starting reshare.")
 
@@ -289,7 +288,7 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	var doneReshare = make(chan *key.Group)
 	go func() {
 		t.Log("[reshare] Start reshare")
-		group, err := dt.RunReshare(t, toKeep, toAdd, newThr, timeout, false, false, false)
+		group, err := dt.RunReshare(t, nil, nodesToKeep, nodesToAdd, newThreshold, timeout, false, false, false)
 		require.NoError(t, err)
 		doneReshare <- group
 	}()
@@ -403,7 +402,7 @@ func TestRunDKGResharePreempt(t *testing.T) {
 	// run the resharing
 	var doneReshare = make(chan *key.Group, 1)
 	go func() {
-		g, err := dt.RunReshare(t, oldN, 0, Thr, timeout, false, false, false)
+		g, err := dt.RunReshare(t, nil, oldN, 0, Thr, timeout, false, false, false)
 		require.NoError(t, err)
 		doneReshare <- g
 	}()
@@ -659,7 +658,7 @@ func TestDrandFollowChain(t *testing.T) {
 
 	rootID := dt.nodes[0].drand.priv.Public
 
-	dt.SetMockClock(tt, group.GenesisTime)
+	dt.SetMockClock(t, group.GenesisTime)
 
 	// do a few periods
 	for i := 0; i < 6; i++ {
@@ -678,41 +677,41 @@ func TestDrandFollowChain(t *testing.T) {
 
 	newNode := dt.SetupNewNodes(t, 1)[0]
 	newClient, err := net.NewControlClient(newNode.drand.opts.controlPort)
-	require.NoError(tt, err)
+	require.NoError(t, err)
 
 	addrToFollow := []string{rootID.Address()}
 	hash := fmt.Sprintf("%x", chain.NewChainInfo(group).Hash())
 	tls := true
 
 	// First try with an invalid hash info
-	tt.Logf("Trying to follow with an invalid address\n")
+	t.Logf("Trying to follow with an invalid address\n")
 
 	ctx, cancel = context.WithCancel(context.Background())
 	_, errCh, _ := newClient.StartFollowChain(ctx, "deadbeef", addrToFollow, tls, 10000)
 
 	select {
 	case <-errCh:
-		tt.Logf("An error was received as the address is invalid")
+		t.Logf("An error was received as the address is invalid")
 	case <-time.After(100 * time.Millisecond):
-		tt.Logf("An error should have been received as the address is invalid")
+		t.Logf("An error should have been received as the address is invalid")
 		panic("should have errored")
 	}
 
 	_, errCh, _ = newClient.StartFollowChain(ctx, "tutu", addrToFollow, tls, 10000)
 	select {
 	case <-errCh:
-		tt.Logf("An error was received as the address is invalid")
+		t.Logf("An error was received as the address is invalid")
 	case <-time.After(100 * time.Millisecond):
-		tt.Logf("An error should have been received as the address is invalid")
+		t.Logf("An error should have been received as the address is invalid")
 		panic("should have errored")
 	}
 
 	fn := func(upTo, exp uint64) {
 		ctx, cancel = context.WithCancel(context.Background())
 
-		tt.Logf("Starting to follow chain with a valid address\n")
+		t.Logf("Starting to follow chain with a valid address\n")
 		progress, errCh, err := newClient.StartFollowChain(ctx, hash, addrToFollow, tls, upTo)
-		require.NoError(tt, err)
+		require.NoError(t, err)
 
 		var goon = true
 		for goon {
