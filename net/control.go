@@ -70,9 +70,9 @@ func NewControlClient(addr string) (*ControlClient, error) {
 }
 
 // Ping the drand daemon to check if it's up and running
-func (c *ControlClient) Ping() error {
-	_, err := c.client.PingPong(ctx.Background(), &control.Ping{})
-	return err
+func (c *ControlClient) Ping() (*control.Pong, error) {
+	pong, err := c.client.PingPong(ctx.Background(), &control.Ping{})
+	return pong, err
 }
 
 // InitReshareLeader sets up the node to be ready for a resharing protocol.

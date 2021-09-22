@@ -562,7 +562,49 @@ func (d *Drand) InitReshare(c context.Context, in *drand.InitResharePacket) (*dr
 // PingPong simply responds with an empty packet, proving that this drand node
 // is up and alive.
 func (d *Drand) PingPong(c context.Context, in *drand.Ping) (*drand.Pong, error) {
-	return &drand.Pong{}, nil
+	d.state.Lock()
+	defer d.state.Unlock()
+
+	resp := drand.Pong{}
+
+	// Last round
+	beacon, err := d.beacon.Store().Last()
+	if( err != nil || beacon == nil){
+		resp.IsAnyRound = false;
+	} else {
+		resp.IsAnyRound = true;
+		resp.LastRound = beacon.GetRound()
+	}
+
+	// DKG status
+	switch {
+	case d.dkgDone:
+		resp.DkgStatus = uint32(DkgReady);
+	case !d.dkgDone && d.receiver != nil:
+		resp.DkgStatus = uint32(DkgInProgress);
+	default:
+		resp.DkgStatus = uint32(DkgNotStarted);
+	}
+
+	// Reshare status
+	switch {
+	case !d.dkgDone:
+		resp.ReshareStatus = uint32(ReshareInProgress)
+	case d.dkgDone && d.receiver != nil:
+		resp.ReshareStatus = uint32(ReshareNotInProgress)
+	}
+
+	// Beacon status
+	switch {
+	case d.beacon == nil:
+		resp.BeaconStatus = uint32(BeaconNotInit)
+	case d.beacon.IsStarted():
+		resp.BeaconStatus = uint32(BeaconStarted)
+	case d.beacon.IsStopped():
+		resp.BeaconStatus = uint32(BeaconStopped)
+	}
+
+	return &resp, nil
 }
 
 // Share is a functionality of Control Service defined in protobuf/control that requests the private share of the drand node running locally
