@@ -509,6 +509,7 @@ func TestDrandPublicRand(t *testing.T) {
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
+	time.Sleep(getSleepDuration())
 
 	root := dt.nodes[0].drand
 	rootID := root.priv.Public
@@ -572,6 +573,7 @@ func TestDrandPublicStream(t *testing.T) {
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
+	time.Sleep(getSleepDuration())
 
 	root := dt.nodes[0]
 	rootID := root.drand.priv.Public
@@ -626,9 +628,6 @@ func TestDrandPublicStream(t *testing.T) {
 	for round := initRound; round < maxRound; round++ {
 		// move time to next period
 		dt.AdvanceMockClock(t, group.Period)
-
-		err = dt.WaitUntilRound(t,dt.nodes[0],round)
-		require.NoError(t, err)
 
 		select {
 		case beacon := <-respCh:
