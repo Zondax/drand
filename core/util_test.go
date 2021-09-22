@@ -51,7 +51,7 @@ type DrandTestScenario struct {
 
 	certPaths    []string
 	newCertPaths []string
-	// global clock on which all drand's clock are synchronized
+	// global clock on which all drand clocks are synchronized
 	clock clock.FakeClock
 
 	n             int
@@ -394,8 +394,6 @@ func (d *DrandTestScenario) AdvanceMockClock(t *testing.T, p time.Duration) {
 		node.clock.Advance(p)
 	}
 	d.clock.Advance(p)
-
-	t.Logf("Advance clock %s: %d", p.String(), d.Now().Unix())
 }
 
 // CheckBeaconLength looks if the beacon chain on the given addresses is of the expected length
@@ -448,7 +446,7 @@ func (d *DrandTestScenario) CheckPublicBeacon(nodeAddress string, newGroup bool)
 }
 
 // SetupNewNodes creates new additional nodes that can participate during the resharing
-func (d *DrandTestScenario) SetupNewNodes(newNodes int) []*MockNode {
+func (d *DrandTestScenario) SetupNewNodes(t *testing.T, newNodes int) []*MockNode {
 	newDrands, _, newDir, newCertPaths := BatchNewDrand(d.t, newNodes, false,
 		WithCallOption(grpc.WaitForReady(false)), WithLogLevel(log.LogDebug))
 	d.newCertPaths = newCertPaths
@@ -458,7 +456,8 @@ func (d *DrandTestScenario) SetupNewNodes(newNodes int) []*MockNode {
 	for _, node := range d.nodes {
 		inst := node.drand
 		for _, cp := range newCertPaths {
-			inst.opts.certmanager.Add(cp)
+			err := inst.opts.certmanager.Add(cp)
+			require.NoError(t, err)
 		}
 	}
 	// store new part. and add certificate path of current nodes to the new
@@ -467,7 +466,8 @@ func (d *DrandTestScenario) SetupNewNodes(newNodes int) []*MockNode {
 		node := newNode(d.clock.Now(), newCertPaths[i], inst)
 		d.newNodes = append(d.newNodes, node)
 		for _, cp := range d.certPaths {
-			inst.opts.certmanager.Add(cp)
+			err := inst.opts.certmanager.Add(cp)
+			require.NoError(t, err)
 		}
 	}
 	return d.newNodes
@@ -475,40 +475,52 @@ func (d *DrandTestScenario) SetupNewNodes(newNodes int) []*MockNode {
 
 func (d *DrandTestScenario) runNodeReshare(n *MockNode, errCh chan error, force bool) {
 	var secret = "thisistheresharing"
+
 	leader := d.nodes[0]
-	// instruct to be ready for a reshare
+
+	// instruct to be ready for resharing
 	client, err := net.NewControlClient(n.drand.opts.controlPort)
 	require.NoError(d.t, err)
+
+	d.t.Logf("[reshare:node] init reshare")
 	_, err = client.InitReshare(leader.drand.priv.Public, secret, d.groupPath, force)
 	if err != nil {
-		d.t.Log("error in NON LEADER: ", err)
+		d.t.Log("[reshare:node] error in NON LEADER: ", err)
 		errCh <- err
 		return
 	}
-	d.t.Logf("RESHARING TEST: non-leader drand %s DONE RESHARING - %s", n.drand.priv.Public.Address(), n.drand.priv.Public.Key)
+
+	d.t.Logf("[reshare]  non-leader drand %s DONE - %s", n.drand.priv.Public.Address(), n.drand.priv.Public.Key)
 }
 
-func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan error, groupCh chan *key.Group) {
+func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan error, groupReceivedCh chan *key.Group) {
 	var secret = "thisistheresharing"
 	leader := d.nodes[0]
+
 	oldNode := d.group.Find(leader.drand.priv.Public)
 	if oldNode == nil {
-		panic("leader not found in old group")
+		panic("[reshare:leader] leader not found in old group")
 	}
-	// old root: oldNode.Index leater: leader.addr
+
+	// old root: oldNode.Index leader: leader.addr
 	client, err := net.NewControlClient(leader.drand.opts.controlPort)
 	require.NoError(d.t, err)
+
+	// Start reshare
+	d.t.Logf("[reshare:leader] init reshare")
 	finalGroup, err := client.InitReshareLeader(d.newN, d.newThr, timeout, 0, secret, "", testBeaconOffset)
-	// Done resharing
 	if err != nil {
-		d.t.Log("error in LEADER: ", err)
+		d.t.Log("[reshare:leader] error: ", err)
 		errCh <- err
 	}
+
+	d.t.Logf("[reshare:leader] retrieve group")
 	fg, err := key.GroupFromProto(finalGroup)
 	if err != nil {
 		errCh <- err
 	}
-	groupCh <- fg
+
+	groupReceivedCh <- fg
 }
 
 // RunReshare runs the resharing procedure with only "oldRun" current nodes
@@ -517,17 +529,9 @@ func (d *DrandTestScenario) runLeaderReshare(timeout time.Duration, errCh chan e
 // It stops the nodes excluded first.
 func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	oldRun, newRun, newThr int,
-	timeout time.Duration,
-	force, onlyLeader bool,
-	ignoreErrs ...bool) (*key.Group, error) {
-
-	d.t.Logf("[reshare] Start")
-
-	var ignoreErr bool
-	if len(ignoreErrs) > 0 {
-		// TODO: When is this happening?
-		d.t.Log("[reshare] WARNING --> Reshare process will ignore errors.")
-		ignoreErr = true
+	timeout time.Duration, force, onlyLeader bool, ignoreErr bool) (*key.Group, error) {
+	if ignoreErr {
+		d.t.Log("[reshare] WARNING IGNORING ERRORS!!!")
 	}
 
 	d.Lock()
@@ -555,13 +559,13 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	d.newThr = newThr
 	leader := d.nodes[0]
 
+	// Create channels
 	errCh := make(chan error, 1)
-	groupCh := make(chan *key.Group, 1)
+	leaderGroupReadyCh := make(chan *key.Group, 1)
 
 	// first run the leader, then the other nodes will send their PK to the
 	// leader and then the leader will answer back with the new group
-	d.t.Logf("[reshare] run leader reshare")
-	go d.runLeaderReshare(timeout, errCh, groupCh)
+	go d.runLeaderReshare(timeout, errCh, leaderGroupReadyCh)
 	d.resharedNodes = append(d.resharedNodes, leader)
 
 	// leave some time to make sure leader is listening
@@ -588,7 +592,7 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 		}
 	}
 
-	d.t.Logf("[reshare] UNLOCK")
+	d.t.Logf("[reshare] unlock")
 	d.Unlock()
 
 	if( stateCh != nil){
@@ -598,8 +602,8 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 	// wait for the return of the clients
 	for {
 		select {
-
-		case finalGroup := <-groupCh:
+		case finalGroup := <-leaderGroupReadyCh:
+			t.Logf("[reshare] Received group!")
 			d.newGroup = finalGroup
 			require.NoError(d.t, key.Save(d.groupPath, d.newGroup, false))
 			d.t.Logf("[reshare] Finish")
@@ -614,7 +618,7 @@ func (d *DrandTestScenario) RunReshare(t *testing.T, stateCh *chan int,
 
 		case <-time.After(500 * time.Millisecond):
 			d.AdvanceMockClock(t, d.period)
-
+			t.Logf("[reshare] Advance clock: %d", d.Now().Unix())
 		}
 	}
 }
@@ -626,18 +630,18 @@ type DenyClient struct {
 	deny []string
 }
 
-func (d *Drand) DenyBroadcastTo(t *testing.T, addrs ...string) {
+func (d *Drand) DenyBroadcastTo(t *testing.T, addresses ...string) {
 	client := d.privGateway.ProtocolClient
 	d.privGateway.ProtocolClient = &DenyClient{
 		t:              t,
 		ProtocolClient: client,
-		deny:           addrs,
+		deny:           addresses,
 	}
 }
 
 func (d *DenyClient) BroadcastDKG(c context.Context, p net.Peer, in *drand.DKGPacket, opts ...net.CallOption) error {
 	if !d.isAllowed(p) {
-		d.t.Logf("[broadcastDKG] denial broadcast DKG to %s\n", p.Address())
+		d.t.Logf("[DKG] Deny communication %s\n", p.Address())
 		return errors.New("dkg broadcast denied")
 	}
 

@@ -32,7 +32,7 @@ func setFDLimit() {
 var testBeaconOffset = 1
 var testDkgTimeout = 2 * time.Second
 
-// Test that a normal dkg process works correctly
+// Test that the normal dkg process works correctly
 func TestRunDKG(t *testing.T) {
 	n := 4
 	expectedBeaconPeriod := 5 * time.Second
@@ -51,7 +51,7 @@ func TestRunDKG(t *testing.T) {
 	assert.Equal(t, int64(449884810), group.GenesisTime)
 }
 
-// Test dkg for a large quantity of nodes
+// Test dkg for a large quantity of nodes (22 nodes)
 func TestRunDKGLarge(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -74,7 +74,11 @@ func TestRunDKGLarge(t *testing.T) {
 	assert.Equal(t, int64(449884810), group.GenesisTime)
 }
 
-// Test ??????????????????????
+// Test Start/Stop after DKG
+// Run DKG
+// Stop last node
+// Restart last node and wait catch up
+// Check beacon still works and length is correct
 func TestDrandDKGFresh(t *testing.T) {
 	n := 4
 	beaconPeriod := 1 * time.Second
@@ -82,6 +86,7 @@ func TestDrandDKGFresh(t *testing.T) {
 	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), beaconPeriod)
 	defer dt.Cleanup()
 
+	// Run DKG
 	finalGroup := dt.RunDKG()
 
 	// make the last node fail (stop)
@@ -102,8 +107,7 @@ func TestDrandDKGFresh(t *testing.T) {
 	dt.StartDrand(lastNodeAddr, true, false)
 
 	// leave some room to do the catchup
-	// Wait for catch up
-	// time.Sleep(2 * time.Second)
+	// TODO: wait until catch up has finished (old code time.Sleep(2 * time.Second))
 
 	dt.AdvanceMockClock(t, beaconPeriod)
 
@@ -118,6 +122,10 @@ func TestDrandDKGFresh(t *testing.T) {
 
 // Test dkg when two nodes cannot broadcast messages between them. The rest of the nodes
 // will be able to broadcast messages, so the process should finish successfully
+// Given 4 nodes = [ 0, 1, 2, 3]
+// 1. Limit communication between 1 and 2
+// 2. Run DKG
+// 3. Run reshare
 func TestRunDKGBroadcastDeny(t *testing.T) {
 	n := 4
 	thr := 3
@@ -137,12 +145,16 @@ func TestRunDKGBroadcastDeny(t *testing.T) {
 	node_2.drand.DenyBroadcastTo(t, node_1.addr)
 
 	group1 := dt.RunDKG()
+
+	// Advance clock
 	dt.SetMockClock(t, group1.GenesisTime)
 	dt.AdvanceMockClock(t, 1*time.Second)
-	time.Sleep(200 * time.Millisecond)
 
-	_, err := dt.RunReshare(t, nil, n, 0, thr, 1*time.Second, false, false)
+	group2, err := dt.RunReshare(t, n, 0, thr, 1*time.Second, false, false, false)
 	require.NoError(t, err)
+	require.NotNil(t, group2)
+
+	t.Log("Resharing complete")
 }
 
 // Test the dkg reshare can be forced to restart and finish successfully
@@ -167,9 +179,10 @@ func TestRunDKGReshareForce(t *testing.T) {
 	// run the resharing
 	stateCh := make(chan int)
 	go func() {
-		t.Log("[reshare] Start reshare")
-		_, err := dt.RunReshare(t, &stateCh, oldNodes, 0, oldThreshold, timeout, false, true)
-		require.Error(t, err)
+		defer reshareWg.Done()
+		t.Log("[ReshareForce] Start reshare")
+		_, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, false, true, false)
+		require.NoError(t, err)
 	}()
 
 	for{
@@ -181,7 +194,7 @@ func TestRunDKGReshareForce(t *testing.T) {
 	// TODO: check the previous reshare was running when forcing a new reshare
 	// force
 	t.Log("[reshare] Start again!")
-	group3, err := dt.RunReshare(t, nil, oldNodes, 0, oldThreshold, timeout, true, false)
+	group3, err := dt.RunReshare(t, oldN, 0, oldThr, timeout, true, false, false)
 	require.NoError(t, err)
 
 	t.Log("[reshare] Move to response phase!")
@@ -276,7 +289,7 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	var doneReshare = make(chan *key.Group)
 	go func() {
 		t.Log("[reshare] Start reshare")
-		group, err := dt.RunReshare(t, nil, nodesToKeep, nodesToAdd, newThreshold, timeout, false, false)
+		group, err := dt.RunReshare(t, toKeep, toAdd, newThr, timeout, false, false, false)
 		require.NoError(t, err)
 		doneReshare <- group
 	}()
@@ -390,7 +403,7 @@ func TestRunDKGResharePreempt(t *testing.T) {
 	// run the resharing
 	var doneReshare = make(chan *key.Group, 1)
 	go func() {
-		g, err := dt.RunReshare(t, nil, oldN, 0, Thr, timeout, false, false)
+		g, err := dt.RunReshare(t, oldN, 0, Thr, timeout, false, false, false)
 		require.NoError(t, err)
 		doneReshare <- g
 	}()
@@ -633,11 +646,12 @@ func TestDrandPublicStream(t *testing.T) {
 	}
 }
 
-func TestDrandFollowChain(tt *testing.T) {
+// ??????????
+func TestDrandFollowChain(t *testing.T) {
 	n := 4
 	p := 1 * time.Second
 
-	dt := NewDrandTestScenario(tt, n, key.DefaultThreshold(n), p)
+	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), p)
 	defer dt.Cleanup()
 
 	group := dt.RunDKG()
@@ -649,7 +663,7 @@ func TestDrandFollowChain(tt *testing.T) {
 
 	// do a few periods
 	for i := 0; i < 6; i++ {
-		dt.AdvanceMockClock(tt, group.Period)
+		dt.AdvanceMockClock(t, group.Period)
 	}
 
 	client := net.NewGrpcClientFromCertManager(dt.nodes[0].drand.opts.certmanager)
@@ -658,11 +672,11 @@ func TestDrandFollowChain(tt *testing.T) {
 
 	// get last round first
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
-	require.NoError(tt, err)
+	require.NoError(t, err)
 
 	// TEST setup a new node and fetch history
 
-	newNode := dt.SetupNewNodes(1)[0]
+	newNode := dt.SetupNewNodes(t, 1)[0]
 	newClient, err := net.NewControlClient(newNode.drand.opts.controlPort)
 	require.NoError(tt, err)
 
@@ -706,7 +720,7 @@ func TestDrandFollowChain(tt *testing.T) {
 			case p, ok := <-progress:
 				if ok && p.Current == exp {
 					// success
-					tt.Logf("Successfull beacion rcv. Round: %d. Keep following chain.", exp)
+					t.Logf("Successfull beacion rcv. Round: %d. Keep following chain.", exp)
 					goon = false
 					break
 				}
@@ -714,9 +728,9 @@ func TestDrandFollowChain(tt *testing.T) {
 				if e == io.EOF {
 					break
 				}
-				require.NoError(tt, e)
+				require.NoError(t, e)
 			case <-time.After(1 * time.Second):
-				tt.FailNow()
+				t.FailNow()
 			}
 		}
 
@@ -725,12 +739,12 @@ func TestDrandFollowChain(tt *testing.T) {
 
 		// check if the beacon is in the database
 		store, err := newNode.drand.createBoltStore()
-		require.NoError(tt, err)
+		require.NoError(t, err)
 		defer store.Close()
 
 		lastB, err := store.Last()
-		require.NoError(tt, err)
-		require.Equal(tt, exp, lastB.Round, "found %d vs expected %d", lastB.Round, exp)
+		require.NoError(t, err)
+		require.Equal(t, exp, lastB.Round, "found %d vs expected %d", lastB.Round, exp)
 	}
 
 	fn(resp.GetRound()-2, resp.GetRound()-2)
@@ -738,7 +752,7 @@ func TestDrandFollowChain(tt *testing.T) {
 	fn(0, resp.GetRound())
 }
 
-// Test if the we can correctly fetch the rounds through the local proxy
+// Test if we can correctly fetch the rounds through the local proxy
 func TestDrandPublicStreamProxy(t *testing.T) {
 	n := 4
 	thr := key.DefaultThreshold(n)
