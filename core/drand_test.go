@@ -181,7 +181,7 @@ func TestRunDKGReshareForce(t *testing.T) {
 	go func() {
 		t.Log("[ReshareForce] Start reshare")
 		_, err := dt.RunReshare(t, &stateCh, oldNodes, 0, oldThreshold, timeout, false, true, false)
-		require.NoError(t, err)
+		require.Error(t, err)
 	}()
 
 	for {
