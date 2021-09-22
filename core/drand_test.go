@@ -148,12 +148,12 @@ func TestRunDKGBroadcastDeny(t *testing.T) {
 // Test the dkg reshare can be forced to restart and finish successfully
 // when another dkg reshare was running before
 func TestRunDKGReshareForce(t *testing.T) {
-	oldN := 4
-	oldThr := 3
+	oldNodes := 4
+	oldThreshold := 3
 	timeout := 1 * time.Second
 	beaconPeriod := 2 * time.Second
 
-	dt := NewDrandTestScenario(t, oldN, oldThr, beaconPeriod)
+	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod)
 	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
@@ -168,7 +168,7 @@ func TestRunDKGReshareForce(t *testing.T) {
 	stateCh := make(chan int)
 	go func() {
 		t.Log("[reshare] Start reshare")
-		_, err := dt.RunReshare(t, &stateCh, oldN, 0, oldThr, timeout, false, true)
+		_, err := dt.RunReshare(t, &stateCh, oldNodes, 0, oldThreshold, timeout, false, true)
 		require.Error(t, err)
 	}()
 
@@ -181,7 +181,7 @@ func TestRunDKGReshareForce(t *testing.T) {
 	// TODO: check the previous reshare was running when forcing a new reshare
 	// force
 	t.Log("[reshare] Start again!")
-	group3, err := dt.RunReshare(t, nil, oldN, 0, oldThr, timeout, true, false)
+	group3, err := dt.RunReshare(t, nil, oldNodes, 0, oldThreshold, timeout, true, false)
 	require.NoError(t, err)
 
 	t.Log("[reshare] Move to response phase!")
@@ -209,7 +209,7 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 	// two = genesis + 1st round (happens at genesis)
 
 	t.Log("Check Beacon Length")
-	dt.CheckBeaconLength(2, false, dt.Ids(newNodes, false)...)
+	dt.CheckBeaconLength(2, false, dt.Ids(oldNodes, false)...)
 
 	// so nodes think they are going forward with round 2
 	dt.AdvanceMockClock(t, 1*time.Second)
