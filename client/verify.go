@@ -152,7 +152,14 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 		b.Signature = next.Signature()
 
 		ipk := info.PublicKey.Clone()
-		if err := b.Verify(ipk, v.opts.decouplePrevSig); err != nil {
+
+		if v.opts.tag.DecouplePrevSig {
+			err = chain.VerifyUnchainedBeacon(b, ipk)
+		} else {
+			err = chain.VerifyChainedBeacon(b, ipk)
+		}
+
+		if err != nil {
 			v.log.Warnw("", "verifying_client", "failed to verify value", "b", b, "err", err)
 			return []byte{}, fmt.Errorf("verifying beacon: %w", err)
 		}
@@ -186,7 +193,14 @@ func (v *verifyingClient) verify(ctx context.Context, info *chain.Info, r *Rando
 	}
 
 	ipk := info.PublicKey.Clone()
-	if err = b.Verify(ipk, v.opts.decouplePrevSig); err != nil {
+
+	if v.opts.tag.DecouplePrevSig {
+		err = chain.VerifyUnchainedBeacon(b, ipk)
+	} else {
+		err = chain.VerifyChainedBeacon(b, ipk)
+	}
+
+	if err != nil {
 		return fmt.Errorf("verification of %v failed: %w", b, err)
 	}
 

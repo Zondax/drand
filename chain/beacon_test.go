@@ -14,7 +14,13 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 
 	var round uint64 = 16
 	prevSig := []byte("My Sweet Previous Signature")
-	msg := Message(round, prevSig, utils.PrevSigDecoupling())
+
+	var msg []byte
+	if utils.PrevSigDecoupling() {
+		msg = MessageUnchained(round, prevSig)
+	} else {
+		msg = MessageChained(round, prevSig)
+	}
 
 	sig, _ := key.AuthScheme.Sign(secret, msg)
 	b.ResetTimer()
@@ -24,7 +30,14 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 			Round:       16,
 			Signature:   sig,
 		}
-		err := b.Verify(public, utils.PrevSigDecoupling())
+
+		var err error
+		if utils.PrevSigDecoupling() {
+			err = VerifyUnchainedBeacon(b, public)
+		} else {
+			err = VerifyChainedBeacon(b, public)
+		}
+
 		if err != nil {
 			panic(err)
 		}

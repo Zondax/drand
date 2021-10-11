@@ -400,7 +400,12 @@ func TestBeaconSync(t *testing.T) {
 	var counter = &sync.WaitGroup{}
 	myCallBack := func(i int) func(*chain.Beacon) {
 		return func(b *chain.Beacon) {
-			require.NoError(t, b.Verify(bt.dpublic, utils.PrevSigDecoupling()))
+			if utils.PrevSigDecoupling() {
+				require.NoError(t, chain.VerifyUnchainedBeacon(*b, bt.dpublic))
+			} else {
+				require.NoError(t, chain.VerifyChainedBeacon(*b, bt.dpublic))
+			}
+
 			t.Logf("round %d done for %s\n", b.Round, bt.nodes[bt.searchNode(i)].private.Public.Address())
 			counter.Done()
 		}
@@ -475,7 +480,12 @@ func TestBeaconSimple(t *testing.T) {
 	counter.Add(n)
 	myCallBack := func(b *chain.Beacon) {
 		// verify partial sig
-		require.NoError(t, b.Verify(bt.dpublic, utils.PrevSigDecoupling()))
+		if utils.PrevSigDecoupling() {
+			require.NoError(t, chain.VerifyUnchainedBeacon(*b, bt.dpublic))
+		} else {
+			require.NoError(t, chain.VerifyChainedBeacon(*b, bt.dpublic))
+		}
+
 		counter.Done()
 	}
 
@@ -533,7 +543,12 @@ func TestBeaconThreshold(t *testing.T) {
 			fmt.Printf(" - test: callback called for node %d - round %d\n", i, b.Round)
 			// verify partial sig
 
-			msg := chain.Message(b.Round, b.PreviousSig, utils.PrevSigDecoupling())
+			var msg []byte
+			if utils.PrevSigDecoupling() {
+				msg = chain.MessageUnchained(b.Round, b.PreviousSig)
+			} else {
+				msg = chain.MessageChained(b.Round, b.PreviousSig)
+			}
 
 			err := key.Scheme.VerifyRecovered(bt.dpublic, msg, b.Signature)
 			require.NoError(t, err)
