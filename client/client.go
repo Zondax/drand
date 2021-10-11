@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/drand/drand/common"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/metrics"
@@ -76,7 +78,7 @@ func makeClient(cfg *clientConfig) (Client, error) {
 
 	verifiers := make([]Client, 0, len(cfg.clients))
 	for _, source := range cfg.clients {
-		opts := Opts{decouplePrevSig: cfg.decouplePrevSig, strict: cfg.fullVerify}
+		opts := Opts{tag: cfg.tag, strict: cfg.fullVerify}
 		nv := newVerifyingClient(source, cfg.previousResult, opts)
 		verifiers = append(verifiers, nv)
 		if source == wc {
@@ -167,8 +169,8 @@ type clientConfig struct {
 	fullVerify bool
 	// insecure indicates the root of trust does not need to be present.
 	insecure bool
-	// decoupledPrevSig
-	decouplePrevSig bool
+	// tag
+	tag common.Tag
 	// cache size - how large of a cache to keep locally.
 	cacheSize int
 	// customized client log.
@@ -220,10 +222,10 @@ func Insecurely() Option {
 	}
 }
 
-// DecouplePrevSig
-func DecouplePrevSig() Option {
+// WithTag
+func WithTag(tag common.Tag) Option {
 	return func(cfg *clientConfig) error {
-		cfg.decouplePrevSig = true
+		cfg.tag = tag
 		return nil
 	}
 }

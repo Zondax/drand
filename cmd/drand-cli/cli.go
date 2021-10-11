@@ -248,9 +248,10 @@ var upToFlag = &cli.IntFlag{
 	Value: 0,
 }
 
-var decouplePrevSigFlag = &cli.BoolFlag{
-	Name:  "decouple-prev-sig",
-	Usage: "Indicates if the previous signature should be used to generate the next one or not",
+var configTagFlag = &cli.StringFlag{
+	Name:  "config-tag",
+	Usage: "Indicates a set of values drand will use to configure the randomness generation process",
+	Value: "Pedersen-bls-chanined",
 }
 
 var jsonFlag = &cli.BoolFlag{
@@ -286,7 +287,7 @@ var appCommands = []*cli.Command{
 		Flags: toArray(insecureFlag, controlFlag, oldGroupFlag,
 			timeoutFlag, sourceFlag, userEntropyOnlyFlag, secretFlag,
 			periodFlag, shareNodeFlag, thresholdFlag, connectFlag, outFlag,
-			leaderFlag, beaconOffset, transitionFlag, forceFlag, catchupPeriodFlag, decouplePrevSigFlag),
+			leaderFlag, beaconOffset, transitionFlag, forceFlag, catchupPeriodFlag, configTagFlag),
 		Action: func(c *cli.Context) error {
 			banner()
 			return shareCmd(c)

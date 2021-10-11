@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/drand/drand/common"
+
 	"github.com/briandowns/spinner"
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/core"
@@ -156,7 +158,11 @@ func leadShareCmd(c *cli.Context) error {
 		return fmt.Errorf("catchup period given is invalid: %v", err)
 	}
 
-	decouplePrevSig := c.Bool(decouplePrevSigFlag.Name)
+	tagName := c.String(configTagFlag.Name)
+	tag, ok := common.Tags[tagName]
+	if !ok {
+		return fmt.Errorf("confi tag name given is invalid")
+	}
 
 	offset := int(core.DefaultGenesisOffset.Seconds())
 	if c.IsSet(beaconOffset.Name) {
@@ -168,7 +174,7 @@ func leadShareCmd(c *cli.Context) error {
 		"group file once the setup phase is done, you can run the `drand show "+
 		"group` command")
 	groupP, shareErr := ctrlClient.InitDKGLeader(nodes, args.threshold, period,
-		catchupPeriod, args.timeout, args.entropy, args.secret, offset, decouplePrevSig)
+		catchupPeriod, args.timeout, args.entropy, args.secret, offset, tag.DecouplePrevSig)
 
 	if shareErr != nil {
 		return fmt.Errorf("error setting up the network: %v", shareErr)

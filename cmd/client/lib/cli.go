@@ -12,6 +12,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/drand/drand/common"
+
 	"github.com/BurntSushi/toml"
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/client"
@@ -78,10 +80,11 @@ var (
 		Name:  "port",
 		Usage: "Local (host:)port for constructed libp2p host to listen on",
 	}
-	// DecouplePrevSigFlag indicates if the previous signature should be used to generate the next one or not
-	DecouplePrevSigFlag = &cli.BoolFlag{
-		Name:  "decouple-prev-sig",
-		Usage: "Indicates if the previous signature should be used to generate the next one or not",
+	// TypeFlag indicates a set of values drand will use to configure the randomness generation process
+	ConfigTagFlag = &cli.StringFlag{
+		Name:  "config-tag",
+		Usage: "Indicates a set of values drand will use to configure the randomness generation process",
+		Value: "Pedersen-bls-chanined",
 	}
 
 	// JsonFlag is the CLI flag for enabling JSON output for logger
@@ -102,7 +105,7 @@ var ClientFlags = []cli.Flag{
 	RelayFlag,
 	PortFlag,
 	JSONFlag,
-	DecouplePrevSigFlag,
+	ConfigTagFlag,
 }
 
 // Create builds a client, and can be invoked from a cli action supplied
@@ -149,9 +152,13 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 		opts = append(opts, client.Insecurely())
 	}
 
-	if c.Bool(DecouplePrevSigFlag.Name) {
-		opts = append(opts, client.DecouplePrevSig())
+	tagName := c.String(ConfigTagFlag.Name)
+	tag, ok := common.Tags[tagName]
+	if !ok {
+		return nil, fmt.Errorf("config tag name given is invalid")
 	}
+
+	opts = append(opts, client.WithTag(tag))
 
 	clients = append(clients, buildHTTPClients(c, &info, hash, withInstrumentation)...)
 

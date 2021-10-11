@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/drand/drand/common"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
 )
 
 type Opts struct {
-	strict          bool
-	decouplePrevSig bool
+	strict bool
+	tag    common.Tag
 }
 
 // newVerifyingClient wraps a client to perform `chain.Verify` on emitted results.
