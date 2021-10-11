@@ -202,13 +202,13 @@ func (d *Drand) cleanupDKG() {
 // first packet so other nodes will start as soon as they receive it.
 func (d *Drand) runResharing(leader bool, oldGroup, newGroup *key.Group, timeout uint32) (*key.Group, error) {
 	oldNode := oldGroup.Find(d.priv.Public)
-	oldPreset := oldNode != nil
-	if leader && !oldPreset {
-		d.log.Errorw("", "run_reshare", "invalid", "leader", leader, "old_present", oldPreset)
+	oldPresent := oldNode != nil
+	if leader && !oldPresent {
+		d.log.Errorw("", "run_reshare", "invalid", "leader", leader, "old_present", oldPresent)
 		return nil, errors.New("can not be a leader if not present in the old group")
 	}
 	newNode := newGroup.Find(d.priv.Public)
-	newPreset := newNode != nil
+	newPresent := newNode != nil
 	config := &dkg.Config{
 		Suite:        key.KeyGroup.(dkg.Suite),
 		NewNodes:     newGroup.DKGNodes(),
@@ -224,7 +224,7 @@ func (d *Drand) runResharing(leader bool, oldGroup, newGroup *key.Group, timeout
 		d.state.Lock()
 		defer d.state.Unlock()
 		// gives the share to the dkg if we are a current node
-		if oldPreset {
+		if oldPresent {
 			if d.dkgInfo != nil {
 				return errors.New("control: can't reshare from old node when DKG not finished first")
 			}
@@ -288,7 +288,7 @@ func (d *Drand) runResharing(leader bool, oldGroup, newGroup *key.Group, timeout
 	}
 	d.log.Infow("", "dkg_reshare", "finished", "leader", leader)
 	// runs the transition of the beacon
-	go d.transition(oldGroup, oldPreset, newPreset)
+	go d.transition(oldGroup, oldPresent, newPresent)
 	return finalGroup, nil
 }
 
