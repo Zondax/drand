@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/drand/drand/chain"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/protobuf/drand"
@@ -139,15 +138,6 @@ func (r *roundCache) append(p *drand.PartialBeaconPacket) bool {
 // Len shows how many items are in the cache
 func (r *roundCache) Len() int {
 	return len(r.sigs)
-}
-
-// Msg provides the chain for the current round
-func (r *roundCache) Msg(decouple bool) []byte {
-	if decouple {
-		return chain.MessageUnchained(r.round, r.prev)
-	} else {
-		return chain.MessageChained(r.round, r.prev)
-	}
 }
 
 // Partials provides all cached partial signatures

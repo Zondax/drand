@@ -18,11 +18,14 @@ type Opts struct {
 
 // newVerifyingClient wraps a client to perform `chain.Verify` on emitted results.
 func newVerifyingClient(c Client, previousResult Result, opts Opts) Client {
+	verifier := chain.NewVerifier(opts.scheme)
+
 	return &verifyingClient{
 		Client:         c,
 		indirectClient: c,
 		pointOfTrust:   previousResult,
 		opts:           opts,
+		verifier:       verifier,
 	}
 }
 
@@ -38,7 +41,8 @@ type verifyingClient struct {
 	potLk        sync.Mutex
 	opts         Opts
 
-	log log.Logger
+	verifier *chain.Verifier
+	log      log.Logger
 }
 
 // SetLog configures the client log output.
@@ -153,11 +157,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 
 		ipk := info.PublicKey.Clone()
 
-		if v.opts.scheme.DecouplePrevSig {
-			err = chain.VerifyUnchainedBeacon(b, ipk)
-		} else {
-			err = chain.VerifyChainedBeacon(b, ipk)
-		}
+		err = v.verifier.VerifyBeacon(b, ipk)
 
 		if err != nil {
 			v.log.Warnw("", "verifying_client", "failed to verify value", "b", b, "err", err)
@@ -194,11 +194,7 @@ func (v *verifyingClient) verify(ctx context.Context, info *chain.Info, r *Rando
 
 	ipk := info.PublicKey.Clone()
 
-	if v.opts.scheme.DecouplePrevSig {
-		err = chain.VerifyUnchainedBeacon(b, ipk)
-	} else {
-		err = chain.VerifyChainedBeacon(b, ipk)
-	}
+	err = v.verifier.VerifyBeacon(b, ipk)
 
 	if err != nil {
 		return fmt.Errorf("verification of %v failed: %w", b, err)
