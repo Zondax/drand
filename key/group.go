@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/drand/drand/common"
+	"github.com/drand/drand/common/scheme"
 
 	"github.com/BurntSushi/toml"
 	kyber "github.com/drand/kyber"
@@ -31,8 +31,8 @@ type Group struct {
 	Threshold int
 	// Period to use for the beacon randomness generation
 	Period time.Duration
-	// ConfigPreset indicates a set of values the process will use to act in specific ways
-	ConfigPreset common.ConfigPreset
+	// Scheme indicates a set of values the process will use to act in specific ways
+	Scheme scheme.Scheme
 	// CatchupPeriod is a delay to insert while in a catchup mode
 	// also can be thought of as the minimum period allowed between
 	// beacon and subsequent partial generation
@@ -176,7 +176,7 @@ type GroupTOML struct {
 	TransitionTime int64           `toml:",omitempty"`
 	GenesisSeed    string          `toml:",omitempty"`
 	PublicKey      *DistPublicTOML `toml:",omitempty"`
-	ConfigPreset   string
+	Scheme         string
 }
 
 // FromTOML decodes the group from the toml struct
@@ -194,11 +194,11 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 		}
 	}
 
-	tag, ok := common.GetConfigPresetById(gt.ConfigPreset)
+	scheme, ok := scheme.GetSchemeById(gt.Scheme)
 	if !ok {
-		return fmt.Errorf("config tag is not valid")
+		return fmt.Errorf("scheme is not valid")
 	}
-	g.ConfigPreset = tag
+	g.Scheme = scheme
 
 	if g.Threshold < dkg.MinimumT(len(gt.Nodes)) {
 		return errors.New("group file have threshold 0")
@@ -251,7 +251,7 @@ func (g *Group) TOML() interface{} {
 		gtoml.PublicKey = g.PublicKey.TOML().(*DistPublicTOML)
 	}
 	gtoml.Period = g.Period.String()
-	gtoml.ConfigPreset = g.ConfigPreset.Id
+	gtoml.Scheme = g.Scheme.Id
 	gtoml.CatchupPeriod = g.CatchupPeriod.String()
 	gtoml.GenesisTime = g.GenesisTime
 	if g.TransitionTime != 0 {
@@ -279,14 +279,14 @@ func (g *Group) TOMLValue() interface{} {
 // NewGroup returns a group from the given information to be used as a new group
 // in a setup or resharing phase. Every identity is map to a Node struct whose
 // index is the position in the list of identity.
-func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPeriod time.Duration, tag common.ConfigPreset) *Group {
+func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPeriod time.Duration, scheme scheme.Scheme) *Group {
 	return &Group{
 		Nodes:         copyAndSort(list),
 		Threshold:     threshold,
 		GenesisTime:   genesis,
 		Period:        period,
 		CatchupPeriod: catchupPeriod,
-		ConfigPreset:  tag,
+		Scheme:        scheme,
 	}
 }
 
@@ -295,7 +295,7 @@ func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPer
 // The threshold is automatically guessed from the length of the distributed
 // key.
 // Note: only used in tests
-func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Duration, transition int64, tag common.ConfigPreset) *Group {
+func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Duration, transition int64, scheme scheme.Scheme) *Group {
 	return &Group{
 		Nodes:          list,
 		Threshold:      len(public.Coefficients),
@@ -304,7 +304,7 @@ func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Dura
 		CatchupPeriod:  period / 2,
 		GenesisTime:    genesis,
 		TransitionTime: transition,
-		ConfigPreset:   tag,
+		Scheme:         scheme,
 	}
 }
 
@@ -355,9 +355,9 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		return nil, fmt.Errorf("period time is zero")
 	}
 
-	configPreset, ok := common.GetConfigPresetById(g.GetConfigPresetId())
+	scheme, ok := scheme.GetSchemeById(g.GetSchemeId())
 	if !ok {
-		return nil, fmt.Errorf("config tag is not valid")
+		return nil, fmt.Errorf("scheme is not valid")
 	}
 
 	catchupPeriod := time.Duration(g.GetCatchupPeriod()) * time.Second
@@ -378,7 +378,7 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		Nodes:          nodes,
 		GenesisTime:    genesisTime,
 		TransitionTime: int64(g.GetTransitionTime()),
-		ConfigPreset:   configPreset,
+		Scheme:         scheme,
 	}
 
 	if g.GetGenesisSeed() != nil {
@@ -418,7 +418,7 @@ func (g *Group) ToProto() *proto.GroupPacket {
 	out.GenesisTime = uint64(g.GenesisTime)
 	out.TransitionTime = uint64(g.TransitionTime)
 	out.GenesisSeed = g.GetGenesisSeed()
-	out.ConfigPresetId = g.ConfigPreset.Id
+	out.SchemeId = g.Scheme.Id
 	if g.PublicKey != nil {
 		var coeffs = make([][]byte, len(g.PublicKey.Coefficients))
 		for i, c := range g.PublicKey.Coefficients {

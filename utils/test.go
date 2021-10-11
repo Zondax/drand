@@ -2,14 +2,15 @@ package utils
 
 import (
 	"os"
-	"strconv"
+
+	"github.com/drand/drand/common/scheme"
 )
 
-func PrevSigDecoupling() bool {
-	flag, err := strconv.ParseBool(os.Getenv("DECOUPLE_PREV_SIG"))
-	if err != nil {
-		return false
+func SchemeForTesting() (scheme.Scheme, bool) {
+	id := os.Getenv("SCHEME_ID")
+	if id == "" {
+		id = scheme.DefaultSchemeId
 	}
 
-	return flag
+	return scheme.GetSchemeById(id)
 }

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	common2 "github.com/drand/drand/common"
+	common2 "github.com/drand/drand/common/scheme"
 
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/key"
@@ -50,7 +50,7 @@ type setupManager struct {
 	beaconOffset  time.Duration
 	catchupPeriod time.Duration
 	beaconPeriod  time.Duration
-	configPreset  common2.ConfigPreset
+	scheme        common2.Scheme
 	dkgTimeout    time.Duration
 	clock         clock.Clock
 	leaderKey     *key.Identity
@@ -73,7 +73,7 @@ func newDKGSetup(
 	leaderKey *key.Identity,
 	beaconPeriod,
 	catchupPeriod uint32,
-	configPresetId string,
+	schemeId string,
 	in *drand.SetupInfoPacket) (*setupManager, error) {
 	n, thr, dkgTimeout, err := validInitPacket(in)
 	if err != nil {
@@ -90,9 +90,9 @@ func newDKGSetup(
 		offset = DefaultGenesisOffset
 	}
 
-	configPreset, ok := common2.GetConfigPresetById(configPresetId)
+	scheme, ok := common2.GetSchemeById(schemeId)
 	if !ok {
-		return nil, fmt.Errorf("config preset id received is not valid")
+		return nil, fmt.Errorf("scheme id received is not valid")
 	}
 
 	sm := &setupManager{
@@ -101,7 +101,7 @@ func newDKGSetup(
 		beaconOffset:  offset,
 		beaconPeriod:  time.Duration(beaconPeriod) * time.Second,
 		catchupPeriod: time.Duration(catchupPeriod) * time.Second,
-		configPreset:  configPreset,
+		scheme:        scheme,
 		dkgTimeout:    dkgTimeout,
 		l:             l,
 		startDKG:      make(chan *key.Group, 1),
@@ -123,12 +123,12 @@ func newReshareSetup(
 	in *drand.InitResharePacket) (*setupManager, error) {
 	// period isn't included for resharing since we keep the same period
 	beaconPeriod := uint32(oldGroup.Period.Seconds())
-	configPresetId := oldGroup.ConfigPreset.Id
+	schemeId := oldGroup.Scheme.Id
 	catchupPeriod := in.CatchupPeriod
 	if !in.CatchupPeriodChanged {
 		catchupPeriod = uint32(oldGroup.CatchupPeriod.Seconds())
 	}
-	sm, err := newDKGSetup(l, c, leaderKey, beaconPeriod, catchupPeriod, configPresetId, in.GetInfo())
+	sm, err := newDKGSetup(l, c, leaderKey, beaconPeriod, catchupPeriod, schemeId, in.GetInfo())
 	if err != nil {
 		return nil, err
 	}
@@ -237,14 +237,14 @@ func (s *setupManager) createAndSend(keys []*key.Identity) {
 		// round the genesis time to a period modulo
 		ps := int64(s.beaconPeriod.Seconds())
 		genesis += (ps - genesis%ps)
-		group = key.NewGroup(keys, s.thr, genesis, s.beaconPeriod, s.catchupPeriod, s.configPreset)
+		group = key.NewGroup(keys, s.thr, genesis, s.beaconPeriod, s.catchupPeriod, s.scheme)
 	} else {
 		genesis := s.oldGroup.GenesisTime
 		atLeast := s.clock.Now().Add(totalDKG).Unix()
 		// transitioning to the next round time that is at least
 		// "DefaultResharingOffset" time from now.
 		_, transition := chain.NextRound(atLeast, s.beaconPeriod, s.oldGroup.GenesisTime)
-		group = key.NewGroup(keys, s.thr, genesis, s.beaconPeriod, s.catchupPeriod, s.configPreset)
+		group = key.NewGroup(keys, s.thr, genesis, s.beaconPeriod, s.catchupPeriod, s.scheme)
 		group.TransitionTime = transition
 		group.GenesisSeed = s.oldGroup.GetGenesisSeed()
 	}

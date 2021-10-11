@@ -12,7 +12,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/drand/drand/common"
+	"github.com/drand/drand/common/scheme"
 
 	"github.com/BurntSushi/toml"
 	"github.com/drand/drand/chain"
@@ -81,10 +81,10 @@ var (
 		Usage: "Local (host:)port for constructed libp2p host to listen on",
 	}
 	// TypeFlag indicates a set of values drand will use to configure the randomness generation process
-	ConfigPresetFlag = &cli.StringFlag{
-		Name:  "config-preset-id",
+	SchemeFlag = &cli.StringFlag{
+		Name:  "scheme",
 		Usage: "Indicates a set of values drand will use to configure the randomness generation process",
-		Value: "Pedersen-bls-chanined",
+		Value: scheme.DefaultSchemeId,
 	}
 
 	// JsonFlag is the CLI flag for enabling JSON output for logger
@@ -105,7 +105,7 @@ var ClientFlags = []cli.Flag{
 	RelayFlag,
 	PortFlag,
 	JSONFlag,
-	ConfigPresetFlag,
+	SchemeFlag,
 }
 
 // Create builds a client, and can be invoked from a cli action supplied
@@ -152,13 +152,13 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 		opts = append(opts, client.Insecurely())
 	}
 
-	configPresetId := c.String(ConfigPresetFlag.Name)
-	configPreset, ok := common.GetConfigPresetById(configPresetId)
+	schemeId := c.String(SchemeFlag.Name)
+	scheme, ok := scheme.GetSchemeById(schemeId)
 	if !ok {
-		return nil, fmt.Errorf("config preset given is invalid")
+		return nil, fmt.Errorf("scheme given is invalid")
 	}
 
-	opts = append(opts, client.WithPreset(configPreset))
+	opts = append(opts, client.WithScheme(scheme))
 
 	clients = append(clients, buildHTTPClients(c, &info, hash, withInstrumentation)...)
 

@@ -43,7 +43,7 @@ message GroupPacket {
     repeated bytes dist_key = 7;
     // catchup_period in seconds
     uint32 catchup_period = 8;
-    string config_preset_id = 9;
+    string scheme_id = 9;
     common.Metadata metadata = 10;
 }
 message GroupRequest {
@@ -67,6 +67,6 @@ message ChainInfoPacket {
     // hash of the genesis group
     bytes groupHash = 5;
     // indicates a set of values the process will use to act in specific ways
-    string config_preset_id = 6;
+    string scheme_id = 6;
     common.Metadata metadata = 7;
 }

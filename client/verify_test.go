@@ -11,28 +11,25 @@ import (
 	"github.com/drand/drand/client/test/result/mock"
 )
 
-func mockClientWithVerifiableResults(n int, decouplePrevSig bool) (client.Client, []mock.Result, error) {
+func mockClientWithVerifiableResults(n int) (client.Client, []mock.Result, error) {
 	info, results := mock.VerifiableResults(n, decouplePrevSig)
 	mc := client.MockClient{Results: results, StrictRounds: true}
 
 	var c client.Client
 	var err error
-	if decouplePrevSig {
-		c, err = client.Wrap(
-			[]client.Client{client.MockClientWithInfo(info), &mc},
-			client.WithChainInfo(info),
-			client.WithVerifiedResult(&results[0]),
-			client.WithFullChainVerification(),
-			client.DecouplePrevSig(),
-		)
-	} else {
-		c, err = client.Wrap(
-			[]client.Client{client.MockClientWithInfo(info), &mc},
-			client.WithChainInfo(info),
-			client.WithVerifiedResult(&results[0]),
-			client.WithFullChainVerification(),
-		)
+
+	scheme, ok := utils.SchemeForTesting()
+	if !ok {
+		return nil, nil, fmt.Errorf("Config preset id is not valid")
 	}
+
+	c, err = client.Wrap(
+		[]client.Client{client.MockClientWithInfo(info), &mc},
+		client.WithChainInfo(info),
+		client.WithVerifiedResult(&results[0]),
+		client.WithFullChainVerification(),
+		client.WithScheme(scheme),
+	)
 
 	if err != nil {
 		return nil, nil, err

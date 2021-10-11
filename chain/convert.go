@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/drand/drand/common"
+	"github.com/drand/drand/common/scheme"
 
 	json "github.com/nikkolasg/hexjson"
 
@@ -20,17 +20,17 @@ func InfoFromProto(p *drand.ChainInfoPacket) (*Info, error) {
 		return nil, err
 	}
 
-	configPreset, ok := common.GetConfigPresetById(p.ConfigPresetId)
+	scheme, ok := scheme.GetSchemeById(p.SchemeId)
 	if !ok {
-		return nil, fmt.Errorf("config preset id received is not valid")
+		return nil, fmt.Errorf("scheme id received is not valid")
 	}
 
 	return &Info{
-		PublicKey:    public,
-		GenesisTime:  p.GenesisTime,
-		Period:       time.Duration(p.Period) * time.Second,
-		GroupHash:    p.GroupHash,
-		ConfigPreset: configPreset,
+		PublicKey:   public,
+		GenesisTime: p.GenesisTime,
+		Period:      time.Duration(p.Period) * time.Second,
+		GroupHash:   p.GroupHash,
+		Scheme:      scheme,
 	}, nil
 }
 
@@ -38,12 +38,12 @@ func InfoFromProto(p *drand.ChainInfoPacket) (*Info, error) {
 func (c *Info) ToProto() *drand.ChainInfoPacket {
 	buff, _ := c.PublicKey.MarshalBinary()
 	return &drand.ChainInfoPacket{
-		PublicKey:      buff,
-		GenesisTime:    c.GenesisTime,
-		Period:         uint32(c.Period.Seconds()),
-		Hash:           c.Hash(),
-		GroupHash:      c.GroupHash,
-		ConfigPresetId: c.ConfigPreset.Id,
+		PublicKey:   buff,
+		GenesisTime: c.GenesisTime,
+		Period:      uint32(c.Period.Seconds()),
+		Hash:        c.Hash(),
+		GroupHash:   c.GroupHash,
+		SchemeId:    c.Scheme.Id,
 	}
 }
 

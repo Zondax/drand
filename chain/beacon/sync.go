@@ -103,7 +103,7 @@ func (s *syncer) tryNode(global context.Context, upTo uint64, n net.Peer) bool {
 
 		// verify the signature validity
 		var err error
-		if s.info.ConfigPreset.DecouplePrevSig {
+		if s.info.Scheme.DecouplePrevSig {
 			err = chain.VerifyUnchainedBeacon(*beacon, s.info.PublicKey)
 		} else {
 			err = chain.VerifyChainedBeacon(*beacon, s.info.PublicKey)

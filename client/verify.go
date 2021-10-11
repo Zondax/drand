@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/drand/drand/common"
+	"github.com/drand/drand/common/scheme"
 
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
 )
 
 type Opts struct {
-	strict       bool
-	configPreset common.ConfigPreset
+	strict bool
+	scheme scheme.Scheme
 }
 
 // newVerifyingClient wraps a client to perform `chain.Verify` on emitted results.
@@ -153,7 +153,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 
 		ipk := info.PublicKey.Clone()
 
-		if v.opts.configPreset.DecouplePrevSig {
+		if v.opts.scheme.DecouplePrevSig {
 			err = chain.VerifyUnchainedBeacon(b, ipk)
 		} else {
 			err = chain.VerifyChainedBeacon(b, ipk)
@@ -194,7 +194,7 @@ func (v *verifyingClient) verify(ctx context.Context, info *chain.Info, r *Rando
 
 	ipk := info.PublicKey.Clone()
 
-	if v.opts.configPreset.DecouplePrevSig {
+	if v.opts.scheme.DecouplePrevSig {
 		err = chain.VerifyUnchainedBeacon(b, ipk)
 	} else {
 		err = chain.VerifyChainedBeacon(b, ipk)
