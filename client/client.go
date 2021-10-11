@@ -78,7 +78,7 @@ func makeClient(cfg *clientConfig) (Client, error) {
 
 	verifiers := make([]Client, 0, len(cfg.clients))
 	for _, source := range cfg.clients {
-		opts := Opts{tag: cfg.tag, strict: cfg.fullVerify}
+		opts := Opts{configPreset: cfg.configPreset, strict: cfg.fullVerify}
 		nv := newVerifyingClient(source, cfg.previousResult, opts)
 		verifiers = append(verifiers, nv)
 		if source == wc {
@@ -169,8 +169,8 @@ type clientConfig struct {
 	fullVerify bool
 	// insecure indicates the root of trust does not need to be present.
 	insecure bool
-	// tag
-	tag common.Tag
+	// configPreset
+	configPreset common.ConfigPreset
 	// cache size - how large of a cache to keep locally.
 	cacheSize int
 	// customized client log.
@@ -222,10 +222,10 @@ func Insecurely() Option {
 	}
 }
 
-// WithTag
-func WithTag(tag common.Tag) Option {
+// WithPreset
+func WithPreset(configPreset common.ConfigPreset) Option {
 	return func(cfg *clientConfig) error {
-		cfg.tag = tag
+		cfg.configPreset = configPreset
 		return nil
 	}
 }

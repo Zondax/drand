@@ -91,8 +91,8 @@ message InitDKGPacket {
     uint32 beacon_period = 3;
     // the minimum beacon period when in catchup.
     uint32 catchup_period = 4;
-    // indicates if the node should not use the prev sig to generate the next one
-    bool decouple_prev_sig = 5;
+    // indicates a set of values the process will use to act in specific ways
+    string config_preset_id = 5;
     common.Metadata metadata = 6;
 }
 

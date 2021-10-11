@@ -111,7 +111,7 @@ func (h *Handler) ProcessPartialBeacon(c context.Context, p *proto.PartialBeacon
 	}
 
 	var msg []byte
-	if h.conf.Group.DecouplePrevSig {
+	if h.conf.Group.ConfigPreset.DecouplePrevSig {
 		msg = chain.MessageUnchained(p.GetRound(), p.GetPreviousSig())
 	} else {
 		msg = chain.MessageChained(p.GetRound(), p.GetPreviousSig())
@@ -359,7 +359,7 @@ func (h *Handler) broadcastNextPartial(current roundInfo, upon *chain.Beacon) {
 	}
 
 	var msg []byte
-	if h.conf.Group.DecouplePrevSig {
+	if h.conf.Group.ConfigPreset.DecouplePrevSig {
 		msg = chain.MessageUnchained(round, previousSig)
 	} else {
 		msg = chain.MessageChained(round, previousSig)

@@ -246,13 +246,13 @@ func (d *Drand) StartBeacon(catchup bool) {
 // TODO: due to current WaitDKG behavior, the old group is overwritten, so an
 // old node that fails during the time the resharing is done and the new network
 // comes up have to wait for the new network to comes in - that is to be fixed
-func (d *Drand) transition(oldGroup *key.Group, oldPresent, newPresent bool) {
+func (d *Drand) transition(oldGroup *key.Group, oldPreset, newPreset bool) {
 	// the node should stop a bit before the new round to avoid starting it at
 	// the same time as the new node
 	// NOTE: this limits the round time of drand - for now it is not a use
 	// case to go that fast
 	timeToStop := d.group.TransitionTime - 1
-	if !newPresent {
+	if !newPreset {
 		// an old node is leaving the network
 		if err := d.beacon.StopAt(timeToStop); err != nil {
 			d.log.Errorw("", "leaving_group", err)
@@ -268,7 +268,7 @@ func (d *Drand) transition(oldGroup *key.Group, oldPresent, newPresent bool) {
 	d.state.Unlock()
 
 	// tell the current beacon to stop just before the new network starts
-	if oldPresent {
+	if oldPreset {
 		d.beacon.TransitionNewGroup(newShare, newGroup)
 	} else {
 		b, err := d.newBeacon()

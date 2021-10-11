@@ -12,8 +12,8 @@ import (
 )
 
 type Opts struct {
-	strict bool
-	tag    common.Tag
+	strict       bool
+	configPreset common.ConfigPreset
 }
 
 // newVerifyingClient wraps a client to perform `chain.Verify` on emitted results.
@@ -153,7 +153,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 
 		ipk := info.PublicKey.Clone()
 
-		if v.opts.tag.DecouplePrevSig {
+		if v.opts.configPreset.DecouplePrevSig {
 			err = chain.VerifyUnchainedBeacon(b, ipk)
 		} else {
 			err = chain.VerifyChainedBeacon(b, ipk)
@@ -194,7 +194,7 @@ func (v *verifyingClient) verify(ctx context.Context, info *chain.Info, r *Rando
 
 	ipk := info.PublicKey.Clone()
 
-	if v.opts.tag.DecouplePrevSig {
+	if v.opts.configPreset.DecouplePrevSig {
 		err = chain.VerifyUnchainedBeacon(b, ipk)
 	} else {
 		err = chain.VerifyChainedBeacon(b, ipk)

@@ -81,8 +81,8 @@ var (
 		Usage: "Local (host:)port for constructed libp2p host to listen on",
 	}
 	// TypeFlag indicates a set of values drand will use to configure the randomness generation process
-	ConfigTagFlag = &cli.StringFlag{
-		Name:  "config-tag",
+	ConfigPresetFlag = &cli.StringFlag{
+		Name:  "config-preset-id",
 		Usage: "Indicates a set of values drand will use to configure the randomness generation process",
 		Value: "Pedersen-bls-chanined",
 	}
@@ -105,7 +105,7 @@ var ClientFlags = []cli.Flag{
 	RelayFlag,
 	PortFlag,
 	JSONFlag,
-	ConfigTagFlag,
+	ConfigPresetFlag,
 }
 
 // Create builds a client, and can be invoked from a cli action supplied
@@ -152,13 +152,13 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 		opts = append(opts, client.Insecurely())
 	}
 
-	tagName := c.String(ConfigTagFlag.Name)
-	tag, ok := common.Tags[tagName]
+	configPresetId := c.String(ConfigPresetFlag.Name)
+	configPreset, ok := common.GetConfigPresetById(configPresetId)
 	if !ok {
-		return nil, fmt.Errorf("config tag name given is invalid")
+		return nil, fmt.Errorf("config preset given is invalid")
 	}
 
-	opts = append(opts, client.WithTag(tag))
+	opts = append(opts, client.WithPreset(configPreset))
 
 	clients = append(clients, buildHTTPClients(c, &info, hash, withInstrumentation)...)
 

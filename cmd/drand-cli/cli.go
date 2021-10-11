@@ -248,8 +248,8 @@ var upToFlag = &cli.IntFlag{
 	Value: 0,
 }
 
-var configTagFlag = &cli.StringFlag{
-	Name:  "config-tag",
+var configPresetFlag = &cli.StringFlag{
+	Name:  "config-preset",
 	Usage: "Indicates a set of values drand will use to configure the randomness generation process",
 	Value: "Pedersen-bls-chanined",
 }
@@ -287,7 +287,7 @@ var appCommands = []*cli.Command{
 		Flags: toArray(insecureFlag, controlFlag, oldGroupFlag,
 			timeoutFlag, sourceFlag, userEntropyOnlyFlag, secretFlag,
 			periodFlag, shareNodeFlag, thresholdFlag, connectFlag, outFlag,
-			leaderFlag, beaconOffset, transitionFlag, forceFlag, catchupPeriodFlag, configTagFlag),
+			leaderFlag, beaconOffset, transitionFlag, forceFlag, catchupPeriodFlag, configPresetFlag),
 		Action: func(c *cli.Context) error {
 			banner()
 			return shareCmd(c)

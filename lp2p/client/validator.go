@@ -61,7 +61,7 @@ func randomnessValidator(info *chain.Info, cache client.Cache, c *Client) pubsub
 			}
 		}
 
-		if info.DecouplePrevSig {
+		if info.ConfigPreset.DecouplePrevSig {
 			err = chain.VerifyUnchainedBeacon(b, info.PublicKey)
 		} else {
 			err = chain.VerifyChainedBeacon(b, info.PublicKey)
