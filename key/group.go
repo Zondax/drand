@@ -176,7 +176,7 @@ type GroupTOML struct {
 	TransitionTime int64           `toml:",omitempty"`
 	GenesisSeed    string          `toml:",omitempty"`
 	PublicKey      *DistPublicTOML `toml:",omitempty"`
-	Scheme         string
+	SchemeID       string
 }
 
 // FromTOML decodes the group from the toml struct
@@ -194,7 +194,12 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 		}
 	}
 
-	sch, ok := scheme.GetSchemeByID(gt.Scheme)
+	schemeID := gt.SchemeID
+	if schemeID == "" {
+		schemeID = scheme.DefaultSchemeID
+	}
+
+	sch, ok := scheme.GetSchemeByID(schemeID)
 	if !ok {
 		return fmt.Errorf("scheme is not valid")
 	}
@@ -250,8 +255,8 @@ func (g *Group) TOML() interface{} {
 	if g.PublicKey != nil {
 		gtoml.PublicKey = g.PublicKey.TOML().(*DistPublicTOML)
 	}
+	gtoml.SchemeID = g.Scheme.ID
 	gtoml.Period = g.Period.String()
-	gtoml.Scheme = g.Scheme.ID
 	gtoml.CatchupPeriod = g.CatchupPeriod.String()
 	gtoml.GenesisTime = g.GenesisTime
 	if g.TransitionTime != 0 {
