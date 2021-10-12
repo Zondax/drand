@@ -21,7 +21,7 @@ type TestJSON struct {
 }
 
 func main() {
-	listener, server := mock.NewMockGRPCPublicServer(serve, true, utils.PrevSigDecoupling())
+	listener, server := mock.NewMockGRPCPublicServer(serve, true, utils.SchemeForTesting())
 	resp, err := server.PublicRand(context.TODO(), &drand.PublicRandRequest{})
 	if err != nil {
 		panic(err)

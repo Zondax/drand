@@ -178,7 +178,7 @@ type Data struct {
 	Scheme            scheme.Scheme
 }
 
-func generateMockData(scheme scheme.Scheme) *Data {
+func generateMockData(sch scheme.Scheme) *Data {
 	secret := key.KeyGroup.Scalar().Pick(random.New())
 	public := key.KeyGroup.Point().Mul(secret, nil)
 	var previous [32]byte
@@ -189,7 +189,7 @@ func generateMockData(scheme scheme.Scheme) *Data {
 	prevRound := uint64(1968)
 
 	var msg []byte
-	if !scheme.DecouplePrevSig {
+	if !sch.DecouplePrevSig {
 		msg = sha256Hash(append(previous[:], roundToBytes(round)...))
 	} else {
 		msg = sha256Hash(roundToBytes(round))
@@ -257,7 +257,7 @@ func NewMockGRPCPublicServer(bind string, badSecondRound bool, sch scheme.Scheme
 	testValid(d)
 
 	d.BadSecondRound = badSecondRound
-	d.Scheme = scheme
+	d.Scheme = sch
 
 	server := newMockServer(d)
 	listener, err := net.NewGRPCListenerForPrivate(context.Background(), bind, "", "", server, true)
@@ -274,7 +274,7 @@ func NewMockServer(badSecondRound bool, sch scheme.Scheme) net.Service {
 	testValid(d)
 
 	d.BadSecondRound = badSecondRound
-	d.Scheme = scheme
+	d.Scheme = sch
 
 	server := newMockServer(d)
 	return server

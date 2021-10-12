@@ -156,7 +156,7 @@ func (l *LocalNode) RunDKG(nodes, thr int, timeout string, leader bool, leaderAd
 	var grp *drand.GroupPacket
 	var err error
 	if leader {
-		grp, err = cl.InitDKGLeader(nodes, thr, p, 0, t, nil, secretDKG, beaconOffset, l.Scheme.ID)
+		grp, err = cl.InitDKGLeader(nodes, thr, p, 0, t, nil, secretDKG, beaconOffset, l.scheme.ID)
 	} else {
 		leader := net.CreatePeer(leaderAddr, l.tls)
 		grp, err = cl.InitDKG(leader, nil, secretDKG)

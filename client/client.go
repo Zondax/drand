@@ -223,9 +223,9 @@ func Insecurely() Option {
 }
 
 // WithScheme
-func WithScheme(scheme scheme.Scheme) Option {
+func WithScheme(sch scheme.Scheme) Option {
 	return func(cfg *clientConfig) error {
-		cfg.scheme = scheme
+		cfg.scheme = sch
 		return nil
 	}
 }

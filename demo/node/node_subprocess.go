@@ -186,7 +186,7 @@ func (n *NodeProc) RunDKG(nodes, thr int, timeout string, leader bool, leaderAdd
 
 		// TODO The momento master supports this new flag, we will be able to remove this
 		if n.scheme.DecouplePrevSig {
-			args = append(args, pair("--scheme", n.Scheme.ID)...)
+			args = append(args, pair("--scheme", n.scheme.ID)...)
 		}
 
 		// make genesis time offset

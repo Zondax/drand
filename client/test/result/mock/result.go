@@ -95,7 +95,7 @@ func VerifiableResults(count int, sch scheme.Scheme) (*chain.Info, []Result) {
 	for i := range out {
 
 		var msg []byte
-		if !scheme.DecouplePrevSig {
+		if !sch.DecouplePrevSig {
 			msg = sha256Hash(append(previous[:], roundToBytes(i+1)...))
 		} else {
 			msg = sha256Hash(roundToBytes(i + 1))

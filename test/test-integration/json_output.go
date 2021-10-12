@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/drand/drand/chain"
+
 	"github.com/drand/drand/utils"
 
 	"github.com/drand/drand/key"
@@ -20,15 +22,21 @@ func main() {
 	public := key.KeyGroup.Point().Mul(private, nil)
 	scheme := bls.NewSchemeOnG2(key.Pairing)
 	round := 1984
+
 	previousSig, err := scheme.Sign(private, []byte("Test Signature"))
 	if err != nil {
 		panic(err)
 	}
-	msg := beacon.Message(previousSig, uint64(round), utils.PrevSigDecoupling())
+
+	sch := utils.SchemeForTesting()
+	verifier := chain.NewVerifier(sch)
+
+	msg := verifier.DigestMessage(previousSig, uint64(round))
 	signature, err := scheme.Sign(private, msg)
 	if err != nil {
 		panic(err)
 	}
+
 	pub, _ := public.MarshalBinary()
 	type Export struct {
 		Signature string
