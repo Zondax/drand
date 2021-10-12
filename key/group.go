@@ -194,11 +194,11 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 		}
 	}
 
-	scheme, ok := scheme.GetSchemeById(gt.Scheme)
+	sch, ok := scheme.GetSchemeByID(gt.Scheme)
 	if !ok {
 		return fmt.Errorf("scheme is not valid")
 	}
-	g.Scheme = scheme
+	g.Scheme = sch
 
 	if g.Threshold < dkg.MinimumT(len(gt.Nodes)) {
 		return errors.New("group file have threshold 0")
@@ -251,7 +251,7 @@ func (g *Group) TOML() interface{} {
 		gtoml.PublicKey = g.PublicKey.TOML().(*DistPublicTOML)
 	}
 	gtoml.Period = g.Period.String()
-	gtoml.Scheme = g.Scheme.Id
+	gtoml.Scheme = g.Scheme.ID
 	gtoml.CatchupPeriod = g.CatchupPeriod.String()
 	gtoml.GenesisTime = g.GenesisTime
 	if g.TransitionTime != 0 {
@@ -279,14 +279,14 @@ func (g *Group) TOMLValue() interface{} {
 // NewGroup returns a group from the given information to be used as a new group
 // in a setup or resharing phase. Every identity is map to a Node struct whose
 // index is the position in the list of identity.
-func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPeriod time.Duration, scheme scheme.Scheme) *Group {
+func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPeriod time.Duration, sch scheme.Scheme) *Group {
 	return &Group{
 		Nodes:         copyAndSort(list),
 		Threshold:     threshold,
 		GenesisTime:   genesis,
 		Period:        period,
 		CatchupPeriod: catchupPeriod,
-		Scheme:        scheme,
+		Scheme:        sch,
 	}
 }
 
@@ -295,7 +295,7 @@ func NewGroup(list []*Identity, threshold int, genesis int64, period, catchupPer
 // The threshold is automatically guessed from the length of the distributed
 // key.
 // Note: only used in tests
-func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Duration, transition int64, scheme scheme.Scheme) *Group {
+func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Duration, transition int64, sch scheme.Scheme) *Group {
 	return &Group{
 		Nodes:          list,
 		Threshold:      len(public.Coefficients),
@@ -304,7 +304,7 @@ func LoadGroup(list []*Node, genesis int64, public *DistPublic, period time.Dura
 		CatchupPeriod:  period / 2,
 		GenesisTime:    genesis,
 		TransitionTime: transition,
-		Scheme:         scheme,
+		Scheme:         sch,
 	}
 }
 
@@ -355,7 +355,7 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		return nil, fmt.Errorf("period time is zero")
 	}
 
-	scheme, ok := scheme.GetSchemeById(g.GetSchemeId())
+	sch, ok := scheme.GetSchemeByID(g.GetSchemeID())
 	if !ok {
 		return nil, fmt.Errorf("scheme is not valid")
 	}
@@ -378,7 +378,7 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		Nodes:          nodes,
 		GenesisTime:    genesisTime,
 		TransitionTime: int64(g.GetTransitionTime()),
-		Scheme:         scheme,
+		Scheme:         sch,
 	}
 
 	if g.GetGenesisSeed() != nil {
@@ -418,7 +418,7 @@ func (g *Group) ToProto() *proto.GroupPacket {
 	out.GenesisTime = uint64(g.GenesisTime)
 	out.TransitionTime = uint64(g.TransitionTime)
 	out.GenesisSeed = g.GetGenesisSeed()
-	out.SchemeId = g.Scheme.Id
+	out.SchemeID = g.Scheme.ID
 	if g.PublicKey != nil {
 		var coeffs = make([][]byte, len(g.PublicKey.Coefficients))
 		for i, c := range g.PublicKey.Coefficients {

@@ -12,8 +12,8 @@ import (
 )
 
 func TestChainInfo(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	_, g1 := test.BatchIdentities(5, scheme)
+	sch := utils.SchemeForTesting()
+	_, g1 := test.BatchIdentities(5, sch)
 	c1 := NewChainInfo(g1)
 	require.NotNil(t, c1)
 	h1 := c1.Hash()
@@ -31,7 +31,7 @@ func TestChainInfo(t *testing.T) {
 	require.Equal(t, h1, h12)
 	require.Equal(t, c1, c12)
 
-	_, g2 := test.BatchIdentities(5, scheme)
+	_, g2 := test.BatchIdentities(5, sch)
 	c2 := NewChainInfo(g2)
 	h2 := c2.Hash()
 	require.NotEqual(t, h1, h2)

@@ -9,9 +9,9 @@ import (
 )
 
 func TestLocalOrchestration(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	o := lib.NewOrchestrator(3, 2, "4s", true, "", false, scheme)
+	o := lib.NewOrchestrator(3, 2, "4s", true, "", false, sch)
 	defer o.Shutdown()
 	o.StartCurrentNodes()
 	o.RunDKG("3")

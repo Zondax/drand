@@ -12,9 +12,9 @@ import (
 )
 
 func mockClientWithVerifiableResults(n int) (client.Client, []mock.Result, error) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	info, results := mock.VerifiableResults(n, scheme)
+	info, results := mock.VerifiableResults(n, sch)
 	mc := client.MockClient{Results: results, StrictRounds: true}
 
 	var c client.Client
@@ -25,7 +25,7 @@ func mockClientWithVerifiableResults(n int) (client.Client, []mock.Result, error
 		client.WithChainInfo(info),
 		client.WithVerifiedResult(&results[0]),
 		client.WithFullChainVerification(),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 	)
 
 	if err != nil {

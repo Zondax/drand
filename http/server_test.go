@@ -21,9 +21,9 @@ import (
 
 func withClient(t *testing.T) (c client.Client, emit func(bool)) {
 	t.Helper()
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	l, s := mock.NewMockGRPCPublicServer(":0", true, scheme)
+	l, s := mock.NewMockGRPCPublicServer(":0", true, sch)
 	lAddr := l.Addr()
 	go l.Start()
 

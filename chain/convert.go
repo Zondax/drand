@@ -20,7 +20,7 @@ func InfoFromProto(p *drand.ChainInfoPacket) (*Info, error) {
 		return nil, err
 	}
 
-	scheme, ok := scheme.GetSchemeById(p.SchemeId)
+	sch, ok := scheme.GetSchemeByID(p.SchemeID)
 	if !ok {
 		return nil, fmt.Errorf("scheme id received is not valid")
 	}
@@ -30,7 +30,7 @@ func InfoFromProto(p *drand.ChainInfoPacket) (*Info, error) {
 		GenesisTime: p.GenesisTime,
 		Period:      time.Duration(p.Period) * time.Second,
 		GroupHash:   p.GroupHash,
-		Scheme:      scheme,
+		Scheme:      sch,
 	}, nil
 }
 
@@ -43,7 +43,7 @@ func (c *Info) ToProto() *drand.ChainInfoPacket {
 		Period:      uint32(c.Period.Seconds()),
 		Hash:        c.Hash(),
 		GroupHash:   c.GroupHash,
-		SchemeId:    c.Scheme.Id,
+		SchemeID:    c.Scheme.ID,
 	}
 }
 

@@ -61,20 +61,20 @@ type Orchestrator struct {
 	binary       string
 }
 
-func NewOrchestrator(n int, thr int, period string, tls bool, binary string, withCurl bool, scheme scheme.Scheme) *Orchestrator {
+func NewOrchestrator(n int, thr int, period string, tls bool, binary string, withCurl bool, sch scheme.Scheme) *Orchestrator {
 	basePath := path.Join(os.TempDir(), "drand-full")
 	os.RemoveAll(basePath)
 	fmt.Printf("[+] Simulation global folder: %s\n", basePath)
 	checkErr(os.MkdirAll(basePath, 0740))
 	certFolder := path.Join(basePath, "certs")
 	checkErr(os.MkdirAll(certFolder, 0740))
-	nodes, paths := createNodes(n, 1, period, basePath, certFolder, tls, binary, scheme)
+	nodes, paths := createNodes(n, 1, period, basePath, certFolder, tls, binary, sch)
 	periodD, err := time.ParseDuration(period)
 	checkErr(err)
 	e := &Orchestrator{
 		n:            n,
 		thr:          thr,
-		scheme:       scheme,
+		scheme:       sch,
 		basePath:     basePath,
 		groupPath:    path.Join(basePath, "group.toml"),
 		newGroupPath: path.Join(basePath, "group2.toml"),
@@ -468,13 +468,13 @@ func (e *Orchestrator) RunResharing(timeout string) {
 	}
 }
 
-func createNodes(n int, offset int, period, basePath, certFolder string, tls bool, binary string, scheme scheme.Scheme) ([]node.Node, []string) {
+func createNodes(n int, offset int, period, basePath, certFolder string, tls bool, binary string, sch scheme.Scheme) ([]node.Node, []string) {
 	var nodes []node.Node
 	for i := 0; i < n; i++ {
 		idx := i + offset
 		var n node.Node
 		if binary != "" {
-			n = node.NewNode(idx, period, basePath, tls, binary, scheme)
+			n = node.NewNode(idx, period, basePath, tls, binary, sch)
 		} else {
 			n = node.NewLocalNode(idx, period, basePath, tls, "127.0.0.1")
 		}

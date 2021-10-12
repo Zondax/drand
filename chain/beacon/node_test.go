@@ -132,12 +132,12 @@ type BeaconTest struct {
 	scheme  scheme.Scheme
 }
 
-func NewBeaconTest(t *testing.T, n, thr int, period time.Duration, genesisTime int64, scheme scheme.Scheme) *BeaconTest {
+func NewBeaconTest(t *testing.T, n, thr int, period time.Duration, genesisTime int64, sch scheme.Scheme) *BeaconTest {
 	prefix, err := ioutil.TempDir(os.TempDir(), "beacon-test")
 	checkErr(err)
 	paths := createBoltStores(prefix, n)
 	shares, commits := dkgShares(t, n, thr)
-	privs, group := test.BatchIdentities(n, scheme)
+	privs, group := test.BatchIdentities(n, sch)
 	group.Threshold = thr
 	group.Period = period
 	group.GenesisTime = genesisTime
@@ -149,7 +149,7 @@ func NewBeaconTest(t *testing.T, n, thr int, period time.Duration, genesisTime i
 		privs:   privs,
 		thr:     thr,
 		period:  period,
-		scheme:  scheme,
+		scheme:  sch,
 		paths:   paths,
 		shares:  shares,
 		group:   group,
@@ -396,12 +396,12 @@ func TestBeaconSync(t *testing.T) {
 
 	genesisOffset := 2 * time.Second
 	genesisTime := clock.NewFakeClock().Now().Add(genesisOffset).Unix()
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	bt := NewBeaconTest(t, n, thr, period, genesisTime, scheme)
+	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch)
 	defer bt.CleanUp()
 
-	verifier := chain.NewVerifier(scheme)
+	verifier := chain.NewVerifier(sch)
 
 	var counter = &sync.WaitGroup{}
 	myCallBack := func(i int) func(*chain.Beacon) {
@@ -475,12 +475,12 @@ func TestBeaconSimple(t *testing.T) {
 	period := 2 * time.Second
 
 	genesisTime := clock.NewFakeClock().Now().Unix() + 2
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	bt := NewBeaconTest(t, n, thr, period, genesisTime, scheme)
+	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch)
 	defer bt.CleanUp()
 
-	verifier := chain.NewVerifier(scheme)
+	verifier := chain.NewVerifier(sch)
 
 	var counter = &sync.WaitGroup{}
 	counter.Add(n)
@@ -536,12 +536,12 @@ func TestBeaconThreshold(t *testing.T) {
 
 	offsetGenesis := 2 * time.Second
 	genesisTime := clock.NewFakeClock().Now().Add(offsetGenesis).Unix()
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	bt := NewBeaconTest(t, n, thr, period, genesisTime, scheme)
+	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch)
 	defer func() { go bt.CleanUp() }()
 
-	verifier := chain.NewVerifier(scheme)
+	verifier := chain.NewVerifier(sch)
 
 	currentRound := uint64(0)
 	var counter = &sync.WaitGroup{}

@@ -9,9 +9,9 @@ import (
 )
 
 func TestClientPrivate(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	drands, _, dir, _ := BatchNewDrand(t, 1, false, scheme, WithPrivateRandomness())
+	drands, _, dir, _ := BatchNewDrand(t, 1, false, sch, WithPrivateRandomness())
 	defer CloseAllDrands(drands)
 	defer os.RemoveAll(dir)
 

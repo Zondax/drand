@@ -51,7 +51,7 @@ type NodeProc struct {
 	scheme     scheme.Scheme
 }
 
-func NewNode(i int, period string, base string, tls bool, binary string, scheme scheme.Scheme) Node {
+func NewNode(i int, period string, base string, tls bool, binary string, sch scheme.Scheme) Node {
 	nbase := path.Join(base, fmt.Sprintf("node-%d", i))
 	os.MkdirAll(nbase, 0740)
 	logPath := path.Join(nbase, "log")
@@ -66,7 +66,7 @@ func NewNode(i int, period string, base string, tls bool, binary string, scheme 
 		publicPath: publicPath,
 		groupPath:  groupPath,
 		period:     period,
-		scheme:     scheme,
+		scheme:     sch,
 		binary:     binary,
 	}
 	n.setup()
@@ -186,7 +186,7 @@ func (n *NodeProc) RunDKG(nodes, thr int, timeout string, leader bool, leaderAdd
 
 		// TODO The momento master supports this new flag, we will be able to remove this
 		if n.scheme.DecouplePrevSig {
-			args = append(args, pair("--scheme", n.scheme.Id)...)
+			args = append(args, pair("--scheme", n.Scheme.ID)...)
 		}
 
 		// make genesis time offset

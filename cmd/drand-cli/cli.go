@@ -253,7 +253,7 @@ var upToFlag = &cli.IntFlag{
 var schemeFlag = &cli.StringFlag{
 	Name:  "scheme",
 	Usage: "Indicates a set of values drand will use to configure the randomness generation process",
-	Value: scheme.DefaultSchemeId,
+	Value: scheme.DefaultSchemeID,
 }
 
 var jsonFlag = &cli.BoolFlag{

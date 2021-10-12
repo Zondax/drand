@@ -13,8 +13,8 @@ type Verifier struct {
 	scheme scheme.Scheme
 }
 
-func NewVerifier(scheme scheme.Scheme) *Verifier {
-	return &Verifier{scheme: scheme}
+func NewVerifier(sch scheme.Scheme) *Verifier {
+	return &Verifier{scheme: sch}
 }
 
 // MessageChained returns a slice of bytes as the message to sign or to verify

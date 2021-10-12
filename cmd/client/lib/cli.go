@@ -84,7 +84,7 @@ var (
 	SchemeFlag = &cli.StringFlag{
 		Name:  "scheme",
 		Usage: "Indicates a set of values drand will use to configure the randomness generation process",
-		Value: scheme.DefaultSchemeId,
+		Value: scheme.DefaultSchemeID,
 	}
 
 	// JsonFlag is the CLI flag for enabling JSON output for logger
@@ -152,10 +152,10 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 		opts = append(opts, client.Insecurely())
 	}
 
-	schemeId := c.String(SchemeFlag.Name)
-	schemeFound, ok := scheme.GetSchemeById(schemeId)
+	schemeID := c.String(SchemeFlag.Name)
+	schemeFound, ok := scheme.GetSchemeByID(schemeID)
 	if !ok {
-		schemeFound, ok = scheme.GetSchemeById(scheme.DefaultSchemeId)
+		schemeFound, ok = scheme.GetSchemeByID(scheme.DefaultSchemeID)
 	}
 
 	opts = append(opts, client.WithScheme(schemeFound))

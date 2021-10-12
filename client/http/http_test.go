@@ -14,8 +14,8 @@ import (
 )
 
 func TestHTTPClient(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, true, scheme)
+	sch := utils.SchemeForTesting()
+	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, true, sch)
 	defer cancel()
 
 	err := WaitServerToBeReady(t, addr)
@@ -52,8 +52,8 @@ func TestHTTPClient(t *testing.T) {
 }
 
 func TestHTTPGetLatest(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, scheme)
+	sch := utils.SchemeForTesting()
+	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	err := WaitServerToBeReady(t, addr)
@@ -87,8 +87,8 @@ func TestHTTPGetLatest(t *testing.T) {
 }
 
 func TestForURLsCreation(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, scheme)
+	sch := utils.SchemeForTesting()
+	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	err := WaitServerToBeReady(t, addr)
@@ -105,8 +105,8 @@ func TestForURLsCreation(t *testing.T) {
 }
 
 func TestHTTPWatch(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, scheme)
+	sch := utils.SchemeForTesting()
+	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	err := WaitServerToBeReady(t, addr)
@@ -135,9 +135,9 @@ func TestHTTPWatch(t *testing.T) {
 }
 
 func TestHTTPClientClose(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, scheme)
+	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	err := WaitServerToBeReady(t, addr)

@@ -73,7 +73,7 @@ func newDKGSetup(
 	leaderKey *key.Identity,
 	beaconPeriod,
 	catchupPeriod uint32,
-	schemeId string,
+	schemeID string,
 	in *drand.SetupInfoPacket) (*setupManager, error) {
 	n, thr, dkgTimeout, err := validInitPacket(in)
 	if err != nil {
@@ -90,7 +90,7 @@ func newDKGSetup(
 		offset = DefaultGenesisOffset
 	}
 
-	scheme, ok := common2.GetSchemeById(schemeId)
+	sch, ok := common2.GetSchemeByID(schemeID)
 	if !ok {
 		return nil, fmt.Errorf("scheme id received is not valid")
 	}
@@ -101,7 +101,7 @@ func newDKGSetup(
 		beaconOffset:  offset,
 		beaconPeriod:  time.Duration(beaconPeriod) * time.Second,
 		catchupPeriod: time.Duration(catchupPeriod) * time.Second,
-		scheme:        scheme,
+		scheme:        sch,
 		dkgTimeout:    dkgTimeout,
 		l:             l,
 		startDKG:      make(chan *key.Group, 1),
@@ -123,12 +123,12 @@ func newReshareSetup(
 	in *drand.InitResharePacket) (*setupManager, error) {
 	// period isn't included for resharing since we keep the same period
 	beaconPeriod := uint32(oldGroup.Period.Seconds())
-	schemeId := oldGroup.Scheme.Id
+	schemeID := oldGroup.Scheme.ID
 	catchupPeriod := in.CatchupPeriod
 	if !in.CatchupPeriodChanged {
 		catchupPeriod = uint32(oldGroup.CatchupPeriod.Seconds())
 	}
-	sm, err := newDKGSetup(l, c, leaderKey, beaconPeriod, catchupPeriod, schemeId, in.GetInfo())
+	sm, err := newDKGSetup(l, c, leaderKey, beaconPeriod, catchupPeriod, schemeID, in.GetInfo())
 	if err != nil {
 		return nil, err
 	}

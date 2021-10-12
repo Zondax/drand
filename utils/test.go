@@ -9,17 +9,17 @@ import (
 func SchemeFromEnv() (scheme.Scheme, bool) {
 	id := os.Getenv("SCHEME_ID")
 	if id == "" {
-		id = scheme.DefaultSchemeId
+		id = scheme.DefaultSchemeID
 	}
 
-	return scheme.GetSchemeById(id)
+	return scheme.GetSchemeByID(id)
 }
 
 func SchemeForTesting() scheme.Scheme {
-	scheme, ok := SchemeFromEnv()
+	sch, ok := SchemeFromEnv()
 	if !ok {
 		panic("scheme is not valid")
 	}
 
-	return scheme
+	return sch
 }

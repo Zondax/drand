@@ -48,7 +48,7 @@ func newMockServer(d *Data) *Server {
 			Period:      uint32(d.Period.Seconds()),
 			GenesisTime: int64(d.Genesis),
 			PublicKey:   d.Public,
-			SchemeId:    d.Scheme.Id,
+			SchemeID:    d.Scheme.ID,
 		},
 	}
 }
@@ -214,7 +214,7 @@ func generateMockData(scheme scheme.Scheme) *Data {
 		Genesis:           time.Now().Add(period * 1969 * -1).Unix(),
 		Period:            period,
 		BadSecondRound:    true,
-		Scheme:            scheme,
+		Scheme:            sch,
 	}
 	return d
 }
@@ -252,8 +252,8 @@ func nextMockData(d *Data) *Data {
 }
 
 // NewMockGRPCPublicServer creates a listener that provides valid single-node randomness.
-func NewMockGRPCPublicServer(bind string, badSecondRound bool, scheme scheme.Scheme) (net.Listener, net.Service) {
-	d := generateMockData(scheme)
+func NewMockGRPCPublicServer(bind string, badSecondRound bool, sch scheme.Scheme) (net.Listener, net.Service) {
+	d := generateMockData(sch)
 	testValid(d)
 
 	d.BadSecondRound = badSecondRound
@@ -269,8 +269,8 @@ func NewMockGRPCPublicServer(bind string, badSecondRound bool, scheme scheme.Sch
 }
 
 // NewMockServer creates a server interface not bound to a newtork port
-func NewMockServer(badSecondRound bool, scheme scheme.Scheme) net.Service {
-	d := generateMockData(scheme)
+func NewMockServer(badSecondRound bool, sch scheme.Scheme) net.Service {
+	d := generateMockData(sch)
 	testValid(d)
 
 	d.BadSecondRound = badSecondRound
@@ -296,8 +296,8 @@ func roundToBytes(r int) []byte {
 }
 
 // NewMockBeacon provides a random beacon and the chain it validates against
-func NewMockBeacon(scheme scheme.Scheme) (*drand.ChainInfoPacket, *drand.PublicRandResponse) {
-	d := generateMockData(scheme)
+func NewMockBeacon(sch scheme.Scheme) (*drand.ChainInfoPacket, *drand.PublicRandResponse) {
+	d := generateMockData(sch)
 	s := newMockServer(d)
 	c, _ := s.ChainInfo(context.Background(), nil)
 	r, _ := s.PublicRand(context.Background(), &drand.PublicRandRequest{Round: 1})

@@ -138,9 +138,9 @@ func TestStartAndStop(t *testing.T) {
 	defer os.RemoveAll(tmpPath)
 
 	n := 5
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	_, group := test.BatchIdentities(n, scheme)
+	_, group := test.BatchIdentities(n, sch)
 	groupPath := path.Join(tmpPath, "group.toml")
 	require.NoError(t, key.Save(groupPath, group, false))
 
@@ -248,8 +248,8 @@ func TestStartWithoutGroup(t *testing.T) {
 
 	fmt.Println(" --- DRAND GROUP ---")
 	// fake group
-	scheme := utils.SchemeForTesting()
-	_, group := test.BatchIdentities(5, scheme)
+	sch := utils.SchemeForTesting()
+	_, group := test.BatchIdentities(5, sch)
 
 	// fake dkg outuput
 	fakeKey := key.KeyGroup.Point().Pick(random.New())
@@ -401,8 +401,8 @@ func TestClientTLS(t *testing.T) {
 	}
 
 	// fake group
-	scheme := utils.SchemeForTesting()
-	_, group := test.BatchTLSIdentities(5, scheme)
+	sch := utils.SchemeForTesting()
+	_, group := test.BatchTLSIdentities(5, sch)
 	// fake dkg outuput
 	fakeKey := key.KeyGroup.Point().Pick(random.New())
 	// need a threshold of coefficients

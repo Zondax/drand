@@ -12,8 +12,8 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 	secret := key.KeyGroup.Scalar().Pick(random.New())
 	public := key.KeyGroup.Point().Mul(secret, nil)
 
-	scheme := utils.SchemeForTesting()
-	verifier := NewVerifier(scheme)
+	sch := utils.SchemeForTesting()
+	verifier := NewVerifier(sch)
 
 	var round uint64 = 16
 	prevSig := []byte("My Sweet Previous Signature")

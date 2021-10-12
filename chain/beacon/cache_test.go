@@ -16,8 +16,8 @@ import (
 var fakeKey = key.NewKeyPair("127.0.0.1:8080")
 
 func generatePartial(idx int, round uint64, prev []byte) *drand.PartialBeaconPacket {
-	scheme := utils.SchemeForTesting()
-	verifier := chain.NewVerifier(scheme)
+	sch := utils.SchemeForTesting()
+	verifier := chain.NewVerifier(sch)
 
 	sh := &share.PriShare{
 		I: idx,
@@ -38,8 +38,8 @@ func TestCacheRound(t *testing.T) {
 	round := uint64(64)
 	prev := []byte("yesterday was another day")
 
-	scheme := utils.SchemeForTesting()
-	verifier := chain.NewVerifier(scheme)
+	sch := utils.SchemeForTesting()
+	verifier := chain.NewVerifier(sch)
 
 	msg := verifier.DigestMessage(round, prev)
 	partial := generatePartial(1, round, prev)

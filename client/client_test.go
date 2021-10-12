@@ -36,19 +36,19 @@ func TestClientConstraints(t *testing.T) {
 }
 
 func TestClientMultiple(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, scheme)
+	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
-	addr2, _, cancel2, _ := httpmock.NewMockHTTPPublicServer(t, false, scheme)
+	addr2, _, cancel2, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel2()
 
 	var c client.Client
 	var e error
 	c, e = client.New(
 		client.From(http.ForURLs([]string{"http://" + addr1, "http://" + addr2}, chainInfo.Hash())...),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 		client.WithChainHash(chainInfo.Hash()))
 
 	if e != nil {
@@ -85,15 +85,15 @@ func TestClientWithChainInfo(t *testing.T) {
 }
 
 func TestClientCache(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, scheme)
+	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	var c client.Client
 	var e error
 	c, e = client.New(client.From(http.ForURLs([]string{"http://" + addr1}, chainInfo.Hash())...),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 		client.WithChainHash(chainInfo.Hash()), client.WithCacheSize(1))
 
 	if e != nil {
@@ -117,15 +117,15 @@ func TestClientCache(t *testing.T) {
 }
 
 func TestClientWithoutCache(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, scheme)
+	sch := utils.SchemeForTesting()
+	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	var c client.Client
 	var e error
 	c, e = client.New(
 		client.From(http.ForURLs([]string{"http://" + addr1}, chainInfo.Hash())...),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 		client.WithChainHash(chainInfo.Hash()),
 		client.WithCacheSize(0))
 
@@ -145,8 +145,8 @@ func TestClientWithoutCache(t *testing.T) {
 }
 
 func TestClientWithWatcher(t *testing.T) {
-	scheme := utils.SchemeForTesting()
-	info, results := mock.VerifiableResults(2, scheme)
+	sch := utils.SchemeForTesting()
+	info, results := mock.VerifiableResults(2, sch)
 
 	ch := make(chan client.Result, len(results))
 	for i := range results {
@@ -162,7 +162,7 @@ func TestClientWithWatcher(t *testing.T) {
 	var err error
 	c, err = client.New(
 		client.WithChainInfo(info),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 		client.WithWatcher(watcherCtor),
 	)
 
@@ -224,9 +224,9 @@ func TestClientChainInfoOverrideError(t *testing.T) {
 }
 
 func TestClientAutoWatch(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, scheme)
+	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
 	httpClient := http.ForURLs([]string{"http://" + addr1}, chainInfo.Hash())
@@ -250,7 +250,7 @@ func TestClientAutoWatch(t *testing.T) {
 		client.From(client.MockClientWithInfo(chainInfo)),
 		client.WithChainHash(chainInfo.Hash()),
 		client.WithWatcher(watcherCtor),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 		client.WithAutoWatch(),
 	)
 
@@ -269,9 +269,9 @@ func TestClientAutoWatch(t *testing.T) {
 }
 
 func TestClientAutoWatchRetry(t *testing.T) {
-	scheme := utils.SchemeForTesting()
+	sch := utils.SchemeForTesting()
 
-	info, results := mock.VerifiableResults(5, scheme)
+	info, results := mock.VerifiableResults(5, sch)
 	resC := make(chan client.Result)
 	defer close(resC)
 
@@ -314,7 +314,7 @@ func TestClientAutoWatchRetry(t *testing.T) {
 		client.WithAutoWatch(),
 		client.WithAutoWatchRetry(time.Second),
 		client.WithCacheSize(len(results)),
-		client.WithScheme(scheme),
+		client.WithScheme(sch),
 	)
 
 	if err != nil {
