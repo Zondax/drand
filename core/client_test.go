@@ -9,7 +9,9 @@ import (
 )
 
 func TestClientPrivate(t *testing.T) {
-	drands, _, dir, _ := BatchNewDrand(t, 1, false, utils.PrevSigDecoupling(), WithPrivateRandomness())
+	scheme := utils.SchemeForTesting()
+
+	drands, _, dir, _ := BatchNewDrand(t, 1, false, scheme, WithPrivateRandomness())
 	defer CloseAllDrands(drands)
 	defer os.RemoveAll(dir)
 

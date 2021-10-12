@@ -63,7 +63,9 @@ func TestBroadcastSet(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	n := 5
-	drands, group, dir, _ := BatchNewDrand(t, n, true, utils.PrevSigDecoupling())
+	scheme := utils.SchemeForTesting()
+
+	drands, group, dir, _ := BatchNewDrand(t, n, true, scheme)
 	defer os.RemoveAll(dir)
 	defer CloseAllDrands(drands)
 

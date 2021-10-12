@@ -15,8 +15,10 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	l, server := mock.NewMockGRPCPublicServer("localhost:0", false, utils.PrevSigDecoupling())
+	scheme := utils.SchemeForTesting()
+	l, server := mock.NewMockGRPCPublicServer("localhost:0", false, scheme)
 	addr := l.Addr()
+
 	go l.Start()
 	defer l.Stop(context.Background())
 
@@ -62,8 +64,10 @@ func TestClient(t *testing.T) {
 }
 
 func TestClientClose(t *testing.T) {
-	l, _ := mock.NewMockGRPCPublicServer("localhost:0", false, utils.PrevSigDecoupling())
+	scheme := utils.SchemeForTesting()
+	l, _ := mock.NewMockGRPCPublicServer("localhost:0", false, scheme)
 	addr := l.Addr()
+
 	go l.Start()
 	defer l.Stop(context.Background())
 

@@ -10,6 +10,8 @@ import (
 	"path"
 	"time"
 
+	"github.com/drand/drand/common/scheme"
+
 	"github.com/drand/drand/client/grpc"
 	"github.com/drand/drand/core"
 	"github.com/drand/drand/fs"
@@ -22,12 +24,12 @@ import (
 )
 
 type LocalNode struct {
-	base            string
-	i               int
-	period          string
-	decouplePrevSig bool
-	publicPath      string
-	certPath        string
+	base       string
+	i          int
+	period     string
+	scheme     scheme.Scheme
+	publicPath string
+	certPath   string
 	// certificate key
 	keyPath string
 	// where all public certs are stored
@@ -154,7 +156,7 @@ func (l *LocalNode) RunDKG(nodes, thr int, timeout string, leader bool, leaderAd
 	var grp *drand.GroupPacket
 	var err error
 	if leader {
-		grp, err = cl.InitDKGLeader(nodes, thr, p, 0, t, nil, secretDKG, beaconOffset, l.decouplePrevSig)
+		grp, err = cl.InitDKGLeader(nodes, thr, p, 0, t, nil, secretDKG, beaconOffset, l.scheme.Id)
 	} else {
 		leader := net.CreatePeer(leaderAddr, l.tls)
 		grp, err = cl.InitDKG(leader, nil, secretDKG)

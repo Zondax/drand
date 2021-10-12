@@ -12,15 +12,13 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 	secret := key.KeyGroup.Scalar().Pick(random.New())
 	public := key.KeyGroup.Point().Mul(secret, nil)
 
+	scheme := utils.SchemeForTesting()
+	verifier := NewVerifier(scheme)
+
 	var round uint64 = 16
 	prevSig := []byte("My Sweet Previous Signature")
 
-	var msg []byte
-	if utils.PrevSigDecoupling() {
-		msg = MessageUnchained(round, prevSig)
-	} else {
-		msg = MessageChained(round, prevSig)
-	}
+	msg := verifier.DigestMessage(round, prevSig)
 
 	sig, _ := key.AuthScheme.Sign(secret, msg)
 	b.ResetTimer()
@@ -31,13 +29,7 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 			Signature:   sig,
 		}
 
-		var err error
-		if utils.PrevSigDecoupling() {
-			err = VerifyUnchainedBeacon(b, public)
-		} else {
-			err = VerifyChainedBeacon(b, public)
-		}
-
+		err := verifier.VerifyBeacon(b, public)
 		if err != nil {
 			panic(err)
 		}

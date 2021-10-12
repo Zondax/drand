@@ -12,16 +12,13 @@ import (
 )
 
 func mockClientWithVerifiableResults(n int) (client.Client, []mock.Result, error) {
-	info, results := mock.VerifiableResults(n, decouplePrevSig)
+	scheme := utils.SchemeForTesting()
+
+	info, results := mock.VerifiableResults(n, scheme)
 	mc := client.MockClient{Results: results, StrictRounds: true}
 
 	var c client.Client
 	var err error
-
-	scheme, ok := utils.SchemeForTesting()
-	if !ok {
-		return nil, nil, fmt.Errorf("Config preset id is not valid")
-	}
 
 	c, err = client.Wrap(
 		[]client.Client{client.MockClientWithInfo(info), &mc},
@@ -46,7 +43,7 @@ func TestVerifyWithOldVerifiedResult(t *testing.T) {
 }
 
 func VerifyFuncTest(t *testing.T, clients, upTo int) {
-	c, results, err := mockClientWithVerifiableResults(clients, utils.PrevSigDecoupling())
+	c, results, err := mockClientWithVerifiableResults(clients)
 	if err != nil {
 		t.Fatal(err)
 	}
