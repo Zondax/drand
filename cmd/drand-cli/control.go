@@ -161,7 +161,7 @@ func leadShareCmd(c *cli.Context) error {
 	schemeId := c.String(schemeFlag.Name)
 	_, ok := scheme.GetSchemeById(schemeId)
 	if !ok {
-		return fmt.Errorf("scheme given is invalid")
+		schemeId = scheme.DefaultSchemeId
 	}
 
 	offset := int(core.DefaultGenesisOffset.Seconds())

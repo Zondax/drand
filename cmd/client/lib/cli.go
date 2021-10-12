@@ -153,12 +153,12 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 	}
 
 	schemeId := c.String(SchemeFlag.Name)
-	scheme, ok := scheme.GetSchemeById(schemeId)
+	schemeFound, ok := scheme.GetSchemeById(schemeId)
 	if !ok {
-		return nil, fmt.Errorf("scheme given is invalid")
+		schemeFound, ok = scheme.GetSchemeById(scheme.DefaultSchemeId)
 	}
 
-	opts = append(opts, client.WithScheme(scheme))
+	opts = append(opts, client.WithScheme(schemeFound))
 
 	clients = append(clients, buildHTTPClients(c, &info, hash, withInstrumentation)...)
 
