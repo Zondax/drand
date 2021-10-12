@@ -47,7 +47,7 @@ type LocalNode struct {
 	daemon *core.Drand
 }
 
-func NewLocalNode(i int, period string, base string, tls bool, bindAddr string) Node {
+func NewLocalNode(i int, period string, base string, tls bool, bindAddr string, sch scheme.Scheme) Node {
 	nbase := path.Join(base, fmt.Sprintf("node-%d", i))
 	os.MkdirAll(nbase, 0740)
 	logPath := path.Join(nbase, "log")
@@ -70,6 +70,7 @@ func NewLocalNode(i int, period string, base string, tls bool, bindAddr string) 
 		pubAddr:  test.FreeBind(bindAddr),
 		privAddr: test.FreeBind(bindAddr),
 		ctrlAddr: test.FreeBind("localhost"),
+		scheme:   sch,
 	}
 
 	var priv *key.Pair
