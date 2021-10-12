@@ -22,7 +22,7 @@ func NewVerifier(sch scheme.Scheme) *Verifier {
 func (v Verifier) DigestMessage(currRound uint64, prevSig []byte) []byte {
 	h := sha256.New()
 
-	if v.scheme.DecouplePrevSig {
+	if !v.scheme.DecouplePrevSig {
 		_, _ = h.Write(prevSig)
 	}
 	_, _ = h.Write(RoundToBytes(currRound))
