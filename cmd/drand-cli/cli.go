@@ -376,7 +376,7 @@ var appCommands = []*cli.Command{
 			{
 				Name:   "list-schemes",
 				Usage:  "List all scheme ids available to use\n",
-				Flags:  toArray(),
+				Flags:  toArray(controlFlag),
 				Action: schemesCmd,
 			},
 			{

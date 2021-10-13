@@ -288,6 +288,7 @@ func TestStartWithoutGroup(t *testing.T) {
 func testStartedDrandFunctional(t *testing.T, ctrlPort, rootPath, address string, group *key.Group, fileStore key.Store) {
 	testPing(t, ctrlPort)
 	testStatus(t, ctrlPort)
+	testListSchemes(t, ctrlPort)
 
 	require.NoError(t, toml.NewEncoder(os.Stdout).Encode(group))
 
@@ -361,6 +362,21 @@ func testStatus(t *testing.T, ctrlPort string) {
 	for i := 0; i < 3; i++ {
 		status := []string{"drand", "util", "status", "--control", ctrlPort}
 		err = CLI().Run(status)
+		if err == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	require.NoError(t, err)
+}
+
+func testListSchemes(t *testing.T, ctrlPort string) {
+	var err error
+
+	fmt.Println(" + running list schemes command with ", ctrlPort)
+	for i := 0; i < 3; i++ {
+		schemes := []string{"drand", "util", "list-schemes", "--control", ctrlPort}
+		err = CLI().Run(schemes)
 		if err == nil {
 			break
 		}
