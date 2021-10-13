@@ -152,10 +152,9 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 		opts = append(opts, client.Insecurely())
 	}
 
-	schemeID := c.String(SchemeFlag.Name)
-	schemeFound, ok := scheme.GetSchemeByID(schemeID)
-	if !ok {
-		schemeFound, ok = scheme.GetSchemeByID(scheme.DefaultSchemeID)
+	schemeFound, err := scheme.GetSchemeByIDWithDefault(c.String(SchemeFlag.Name))
+	if err != nil {
+		return nil, fmt.Errorf("scheme %s given is invalid", c.String(SchemeFlag.Name))
 	}
 
 	opts = append(opts, client.WithScheme(schemeFound))

@@ -194,16 +194,9 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 		}
 	}
 
-	schemeID := gt.SchemeID
-	if schemeID == "" {
-		schemeID = scheme.DefaultSchemeID
+	if g.Scheme, err = scheme.GetSchemeByIDWithDefault(gt.SchemeID); err != nil {
+		return err
 	}
-
-	sch, ok := scheme.GetSchemeByID(schemeID)
-	if !ok {
-		return fmt.Errorf("scheme is not valid")
-	}
-	g.Scheme = sch
 
 	if g.Threshold < dkg.MinimumT(len(gt.Nodes)) {
 		return errors.New("group file have threshold 0")
@@ -360,14 +353,10 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		return nil, fmt.Errorf("period time is zero")
 	}
 
-	schemeID := g.GetSchemeID()
-	if schemeID == "" {
-		schemeID = scheme.DefaultSchemeID
-	}
-
-	sch, ok := scheme.GetSchemeByID(schemeID)
-	if !ok {
-		return nil, fmt.Errorf("scheme is not valid")
+	var sch scheme.Scheme
+	var err error
+	if sch, err = scheme.GetSchemeByIDWithDefault(g.GetSchemeID()); err != nil {
+		return nil, err
 	}
 
 	catchupPeriod := time.Duration(g.GetCatchupPeriod()) * time.Second

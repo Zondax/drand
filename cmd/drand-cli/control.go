@@ -158,10 +158,9 @@ func leadShareCmd(c *cli.Context) error {
 		return fmt.Errorf("catchup period given is invalid: %v", err)
 	}
 
-	schemeID := c.String(schemeFlag.Name)
-	_, ok := scheme.GetSchemeByID(schemeID)
-	if !ok {
-		schemeID = scheme.DefaultSchemeID
+	var sch scheme.Scheme
+	if sch, err = scheme.GetSchemeByIDWithDefault(c.String(schemeFlag.Name)); err != nil {
+		return fmt.Errorf("scheme given is invalid: %v", err)
 	}
 
 	offset := int(core.DefaultGenesisOffset.Seconds())
@@ -174,7 +173,7 @@ func leadShareCmd(c *cli.Context) error {
 		"group file once the setup phase is done, you can run the `drand show "+
 		"group` command")
 	groupP, shareErr := ctrlClient.InitDKGLeader(nodes, args.threshold, period,
-		catchupPeriod, args.timeout, args.entropy, args.secret, offset, schemeID)
+		catchupPeriod, args.timeout, args.entropy, args.secret, offset, sch.ID)
 
 	if shareErr != nil {
 		return fmt.Errorf("error setting up the network: %v", shareErr)
