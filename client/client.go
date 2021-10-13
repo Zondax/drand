@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/drand/drand/common/scheme"
@@ -225,6 +226,19 @@ func Insecurely() Option {
 // WithScheme
 func WithScheme(sch scheme.Scheme) Option {
 	return func(cfg *clientConfig) error {
+		cfg.scheme = sch
+		return nil
+	}
+}
+
+// WithSchemeID
+func WithSchemeID(schID string) Option {
+	return func(cfg *clientConfig) error {
+		sch, ok := scheme.GetSchemeByID(schID)
+		if !ok {
+			return fmt.Errorf("scheme is not valid")
+		}
+
 		cfg.scheme = sch
 		return nil
 	}
