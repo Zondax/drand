@@ -94,6 +94,14 @@ func (c *ControlClient) Status() (*control.StatusResponse, error) {
 	return resp, err
 }
 
+// ListSchemes responds with the list of ids for the available schemes
+func (c *ControlClient) ListSchemes() (*control.ListSchemesResponse, error) {
+	metadata := protoCommon.NewMetadata(c.version.ToProto())
+
+	resp, err := c.client.ListSchemes(ctx.Background(), &control.ListSchemesRequest{Metadata: metadata})
+	return resp, err
+}
+
 // InitReshareLeader sets up the node to be ready for a resharing protocol.
 // NOTE: only group referral via filesystem path is supported at the moment.
 // XXX Might be best to move to core/

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drand/drand/common/scheme"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/chain/beacon"
 	"github.com/drand/drand/entropy"
@@ -630,6 +632,12 @@ func (d *Drand) Status(c context.Context, in *drand.StatusRequest) (*drand.Statu
 	}
 
 	return &drand.StatusResponse{Dkg: &dkgStatus, Reshare: &reshareStatus, ChainStore: &chainStore, Beacon: &beaconStatus}, nil
+}
+
+func (d *Drand) ListSchemes(c context.Context, in *drand.ListSchemesRequest) (*drand.ListSchemesResponse, error) {
+	metadata := common.NewMetadata(d.version.ToProto())
+
+	return &drand.ListSchemesResponse{Ids: scheme.ListSchemes(), Metadata: metadata}, nil
 }
 
 // Share is a functionality of Control Service defined in protobuf/control that requests the private share of the drand node running locally

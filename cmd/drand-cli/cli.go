@@ -369,13 +369,19 @@ var appCommands = []*cli.Command{
 			},
 			{
 				Name:   "ping",
-				Usage:  "pings the daemon checking its state\n",
+				Usage:  "Pings the daemon checking its state\n",
 				Flags:  toArray(controlFlag),
 				Action: pingpongCmd,
 			},
 			{
+				Name:   "list-schemes",
+				Usage:  "List all scheme ids available to use\n",
+				Flags:  toArray(),
+				Action: schemesCmd,
+			},
+			{
 				Name:   "status",
-				Usage:  "get the status of many modules of running the daemon\n",
+				Usage:  "Get the status of many modules of running the daemon\n",
 				Flags:  toArray(controlFlag, jsonFlag),
 				Action: statusCmd,
 			},

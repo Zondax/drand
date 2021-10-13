@@ -330,6 +330,26 @@ func statusCmd(c *cli.Context) error {
 	return nil
 }
 
+func schemesCmd(c *cli.Context) error {
+	client, err := controlClient(c)
+	if err != nil {
+		return err
+	}
+	resp, err := client.ListSchemes()
+	if err != nil {
+		return fmt.Errorf("drand: can't get the list of scheme ids availables ... %s", err)
+	}
+
+	fmt.Fprintf(output, "Drand supports the following list of schemes: \n")
+	
+	for i, id := range resp.Ids{
+		fmt.Fprintf(output, "%d) %s \n", i, id)
+	}
+
+	fmt.Fprintf(output, "\nChoose one of them and set it on --scheme flag \n")
+	return nil
+}
+
 func showGroupCmd(c *cli.Context) error {
 	client, err := controlClient(c)
 	if err != nil {
