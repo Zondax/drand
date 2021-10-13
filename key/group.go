@@ -360,7 +360,12 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 		return nil, fmt.Errorf("period time is zero")
 	}
 
-	sch, ok := scheme.GetSchemeByID(g.GetSchemeID())
+	schemeID := g.GetSchemeID()
+	if schemeID == "" {
+		schemeID = scheme.DefaultSchemeID
+	}
+
+	sch, ok := scheme.GetSchemeByID(schemeID)
 	if !ok {
 		return nil, fmt.Errorf("scheme is not valid")
 	}
