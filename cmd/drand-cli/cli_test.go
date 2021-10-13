@@ -14,13 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/utils"
-
 	json "github.com/nikkolasg/hexjson"
 
 	"github.com/BurntSushi/toml"
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/chain/boltdb"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/core"
 	"github.com/drand/drand/fs"
 	"github.com/drand/drand/key"
@@ -138,7 +137,7 @@ func TestStartAndStop(t *testing.T) {
 	defer os.RemoveAll(tmpPath)
 
 	n := 5
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	_, group := test.BatchIdentities(n, sch)
 	groupPath := path.Join(tmpPath, "group.toml")
@@ -248,7 +247,7 @@ func TestStartWithoutGroup(t *testing.T) {
 
 	fmt.Println(" --- DRAND GROUP ---")
 	// fake group
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	_, group := test.BatchIdentities(5, sch)
 
 	// fake dkg outuput
@@ -401,7 +400,7 @@ func TestClientTLS(t *testing.T) {
 	}
 
 	// fake group
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	_, group := test.BatchTLSIdentities(5, sch)
 	// fake dkg outuput
 	fakeKey := key.KeyGroup.Point().Pick(random.New())

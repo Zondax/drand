@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/drand/utils"
@@ -63,7 +64,7 @@ func TestBroadcastSet(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	n := 5
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	drands, group, dir, _ := BatchNewDrand(t, n, true, sch)
 	defer os.RemoveAll(dir)

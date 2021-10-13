@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/utils"
-
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/protobuf/drand"
 	kyber "github.com/drand/kyber"
 	"github.com/drand/kyber/util/random"
@@ -36,7 +35,7 @@ func TestGroupProtobuf(t *testing.T) {
 	n := 9
 	thr := 5
 	ids := newIds(n)
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	dpub := []kyber.Point{KeyGroup.Point().Pick(random.New())}
 	group := LoadGroup(ids, 1, &DistPublic{dpub}, 30*time.Second, 61, sch)
@@ -102,7 +101,7 @@ func TestGroupProtobuf(t *testing.T) {
 
 func TestGroupUnsignedIdentities(t *testing.T) {
 	ids := newIds(5)
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	group := LoadGroup(ids, 1, &DistPublic{[]kyber.Point{KeyGroup.Point()}}, 30*time.Second, 61, sch)
 	require.Nil(t, group.UnsignedIdentities())
@@ -117,7 +116,7 @@ func TestGroupSaveLoad(t *testing.T) {
 	n := 3
 	ids := newIds(n)
 	dpub := []kyber.Point{KeyGroup.Point().Pick(random.New())}
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	group := LoadGroup(ids, 1, &DistPublic{dpub}, 30*time.Second, 61, sch)
 	group.Threshold = 3
@@ -161,7 +160,7 @@ func makeGroup(t *testing.T) *Group {
 	t.Helper()
 
 	fakeKey := KeyGroup.Point().Pick(random.New())
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	group := LoadGroup([]*Node{}, 1, &DistPublic{Coefficients: []kyber.Point{fakeKey}}, 30*time.Second, 0, sch)
 	group.Threshold = MinimumT(0)

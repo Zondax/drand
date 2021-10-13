@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/drand/drand/utils"
-
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/test"
 	"github.com/stretchr/testify/require"
 )
 
 func TestChainInfo(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	_, g1 := test.BatchIdentities(5, sch)
 	c1 := NewChainInfo(g1)
 	require.NotNil(t, c1)

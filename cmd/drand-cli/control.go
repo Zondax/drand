@@ -341,8 +341,8 @@ func schemesCmd(c *cli.Context) error {
 	}
 
 	fmt.Fprintf(output, "Drand supports the following list of schemes: \n")
-	
-	for i, id := range resp.Ids{
+
+	for i, id := range resp.Ids {
 		fmt.Fprintf(output, "%d) %s \n", i, id)
 	}
 

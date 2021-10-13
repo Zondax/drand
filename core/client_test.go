@@ -4,12 +4,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/drand/drand/utils"
+	"github.com/drand/drand/common/scheme"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClientPrivate(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	drands, _, dir, _ := BatchNewDrand(t, 1, false, sch, WithPrivateRandomness())
 	defer CloseAllDrands(drands)

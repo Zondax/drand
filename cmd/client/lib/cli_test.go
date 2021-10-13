@@ -11,10 +11,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/client"
 	httpmock "github.com/drand/drand/client/test/http/mock"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/test/mock"
 	"github.com/urfave/cli/v2"
 )
@@ -51,7 +50,7 @@ func TestClientLib(t *testing.T) {
 		t.Fatal("need to specify a connection method.", err)
 	}
 
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr, info, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
@@ -105,7 +104,7 @@ func TestClientLibGroupConfTOML(t *testing.T) {
 }
 
 func TestClientLibGroupConfJSON(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr, info, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()

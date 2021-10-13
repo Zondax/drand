@@ -7,8 +7,6 @@ import (
 
 	"github.com/drand/drand/chain"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/key"
 	"github.com/drand/kyber/sign/bls"
 	"github.com/drand/kyber/util/random"
@@ -28,7 +26,7 @@ func main() {
 		panic(err)
 	}
 
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	verifier := chain.NewVerifier(sch)
 
 	msg := verifier.DigestMessage(previousSig, uint64(round))

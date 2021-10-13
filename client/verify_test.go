@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/client/test/result/mock"
+	"github.com/drand/drand/common/scheme"
 )
 
 func mockClientWithVerifiableResults(n int) (client.Client, []mock.Result, error) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	info, results := mock.VerifiableResults(n, sch)
 	mc := client.MockClient{Results: results, StrictRounds: true}

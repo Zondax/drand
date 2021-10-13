@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/client/test/http/mock"
+	"github.com/drand/drand/common/scheme"
 )
 
 func TestHTTPClient(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, true, sch)
 	defer cancel()
 
@@ -52,7 +51,7 @@ func TestHTTPClient(t *testing.T) {
 }
 
 func TestHTTPGetLatest(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
@@ -87,7 +86,7 @@ func TestHTTPGetLatest(t *testing.T) {
 }
 
 func TestForURLsCreation(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
@@ -105,7 +104,7 @@ func TestForURLsCreation(t *testing.T) {
 }
 
 func TestHTTPWatch(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
@@ -135,7 +134,7 @@ func TestHTTPWatch(t *testing.T) {
 }
 
 func TestHTTPClientClose(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr, chainInfo, cancel, _ := mock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()

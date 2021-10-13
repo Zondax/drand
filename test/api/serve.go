@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/drand/drand/utils"
-
 	json "github.com/nikkolasg/hexjson"
 
 	"github.com/drand/drand/protobuf/drand"
@@ -21,7 +19,7 @@ type TestJSON struct {
 }
 
 func main() {
-	listener, server := mock.NewMockGRPCPublicServer(serve, true, utils.SchemeForTesting())
+	listener, server := mock.NewMockGRPCPublicServer(serve, true, scheme.SchemeForTesting())
 	resp, err := server.PublicRand(context.TODO(), &drand.PublicRandRequest{})
 	if err != nil {
 		panic(err)

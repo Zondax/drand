@@ -3,9 +3,8 @@ package beacon
 import (
 	"testing"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/chain"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/protobuf/drand"
@@ -16,7 +15,7 @@ import (
 var fakeKey = key.NewKeyPair("127.0.0.1:8080")
 
 func generatePartial(idx int, round uint64, prev []byte) *drand.PartialBeaconPacket {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	verifier := chain.NewVerifier(sch)
 
 	sh := &share.PriShare{
@@ -38,7 +37,7 @@ func TestCacheRound(t *testing.T) {
 	round := uint64(64)
 	prev := []byte("yesterday was another day")
 
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	verifier := chain.NewVerifier(sch)
 
 	msg := verifier.DigestMessage(round, prev)

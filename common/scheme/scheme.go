@@ -1,5 +1,7 @@
 package scheme
 
+import "os"
+
 const DefaultSchemeID = "pedersen-bls-chained"
 const UnchainedSchemeID = "pedersen-bls-unchained"
 
@@ -26,4 +28,22 @@ func ListSchemes() (schemeIDs []string) {
 	}
 
 	return schemeIDs
+}
+
+func ReadSchemeByEnv() (Scheme, bool) {
+	id := os.Getenv("SCHEME_ID")
+	if id == "" {
+		id = DefaultSchemeID
+	}
+
+	return GetSchemeByID(id)
+}
+
+func GetSchemeFromEnv() Scheme {
+	sch, ok := ReadSchemeByEnv()
+	if !ok {
+		panic("scheme is not valid")
+	}
+
+	return sch
 }

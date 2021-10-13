@@ -3,8 +3,8 @@ package chain
 import (
 	"testing"
 
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
-	"github.com/drand/drand/utils"
 	"github.com/drand/kyber/util/random"
 )
 
@@ -12,7 +12,7 @@ func BenchmarkVerifyBeacon(b *testing.B) {
 	secret := key.KeyGroup.Scalar().Pick(random.New())
 	public := key.KeyGroup.Point().Mul(secret, nil)
 
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	verifier := NewVerifier(sch)
 
 	var round uint64 = 16

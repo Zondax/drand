@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/client/grpc"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/drand/test/mock"
 	"github.com/stretchr/testify/require"
@@ -21,7 +20,7 @@ import (
 
 func withClient(t *testing.T) (c client.Client, emit func(bool)) {
 	t.Helper()
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	l, s := mock.NewMockGRPCPublicServer(":0", true, sch)
 	lAddr := l.Addr()

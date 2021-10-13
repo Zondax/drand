@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/client/http"
 	httpmock "github.com/drand/drand/client/test/http/mock"
 	"github.com/drand/drand/client/test/result/mock"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/test"
 )
 
@@ -36,7 +35,7 @@ func TestClientConstraints(t *testing.T) {
 }
 
 func TestClientMultiple(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
@@ -85,7 +84,7 @@ func TestClientWithChainInfo(t *testing.T) {
 }
 
 func TestClientCache(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
@@ -117,7 +116,7 @@ func TestClientCache(t *testing.T) {
 }
 
 func TestClientWithoutCache(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
 
@@ -145,7 +144,7 @@ func TestClientWithoutCache(t *testing.T) {
 }
 
 func TestClientWithWatcher(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 	info, results := mock.VerifiableResults(2, sch)
 
 	ch := make(chan client.Result, len(results))
@@ -224,7 +223,7 @@ func TestClientChainInfoOverrideError(t *testing.T) {
 }
 
 func TestClientAutoWatch(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	addr1, chainInfo, cancel, _ := httpmock.NewMockHTTPPublicServer(t, false, sch)
 	defer cancel()
@@ -269,7 +268,7 @@ func TestClientAutoWatch(t *testing.T) {
 }
 
 func TestClientAutoWatchRetry(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.GetSchemeFromEnv()
 
 	info, results := mock.VerifiableResults(5, sch)
 	resC := make(chan client.Result)

@@ -3,13 +3,11 @@ package main
 import (
 	"testing"
 
-	"github.com/drand/drand/utils"
-
 	"github.com/drand/drand/demo/lib"
 )
 
 func TestLocalOrchestration(t *testing.T) {
-	sch := utils.SchemeForTesting()
+	sch := scheme.SchemeForTesting()
 
 	o := lib.NewOrchestrator(3, 2, "4s", true, "", false, sch)
 	defer o.Shutdown()
