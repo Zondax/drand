@@ -2,6 +2,7 @@ package key
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -27,6 +28,11 @@ type Store interface {
 	Reset(...ResetOption) error
 }
 
+//
+const DefaultStoreID = "default"
+
+const BeaconsFolderName = "beacons"
+
 // KeyFolderName is the name of the folder where drand keeps its keys
 const KeyFolderName = "key"
 
@@ -51,6 +57,7 @@ type Tomler interface {
 // fileStore is a Store using filesystem to store informations
 type fileStore struct {
 	baseFolder     string
+	groupID        string
 	privateKeyFile string
 	publicKeyFile  string
 	shareFile      string
@@ -58,17 +65,85 @@ type fileStore struct {
 	groupFile      string
 }
 
-// NewFileStore is used to create the config folder and all the subfolders.
-// If a folder alredy exists, we simply check the rights
-func NewFileStore(baseFolder string) Store {
+func CheckPreConditions(baseFolder string) {
 	// config folder
 	if fs.CreateSecureFolder(baseFolder) == "" {
 		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
 		os.Exit(1)
 	}
-	store := &fileStore{baseFolder: baseFolder}
+
+	if fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName)) == "" {
+		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
+		os.Exit(1)
+	}
+
+	isPrev, err := CheckPrevStructureForStoreFolder(baseFolder)
+	if err != nil {
+		fmt.Println("")
+		os.Exit(1)
+	}
+
+	if isPrev {
+		if fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName)) == "" {
+			fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
+			os.Exit(1)
+		}
+
+		fs.MoveFolder(path.Join(baseFolder, GroupFolderName), path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName))
+	}
+}
+
+func CheckPrevStructureForStoreFolder(baseFolder string) (bool, error) {
+	folders, err := fs.Folders(baseFolder)
+	if err != nil {
+		return false, err
+	}
+
+	found := false
+	groupFolderPath := path.Join(baseFolder, GroupFolderName)
+
+	for _, folderPath := range folders {
+		if groupFolderPath == folderPath {
+			found = true
+			break
+		}
+	}
+
+	return found, nil
+}
+
+// NewFileStore is used to create the config folder and all the subfolders.
+// If a folder alredy exists, we simply check the rights
+func NewFileStores(baseFolder string) map[string]Store {
+	CheckPreConditions(baseFolder)
+
+	fileStores := make(map[string]Store, 0)
+	fi, err := ioutil.ReadDir(path.Join(baseFolder, BeaconsFolderName))
+	if err != nil {
+		return fileStores
+	}
+
+	for _, f := range fi {
+		if f.IsDir() {
+			fileStores[f.Name()] = NewFileStore(baseFolder, f.Name())
+		}
+	}
+
+	if len(fileStores) == 0 {
+		fileStores[DefaultStoreID] = NewFileStore(baseFolder, DefaultStoreID)
+	}
+
+	return fileStores
+}
+
+// NewFileStore is used to create the config folder and all the subfolders.
+// If a folder alredy exists, we simply check the rights
+func NewFileStore(baseFolder string, groupID string) Store {
+	store := &fileStore{baseFolder: baseFolder, groupID: groupID}
+
 	keyFolder := fs.CreateSecureFolder(path.Join(baseFolder, KeyFolderName))
-	groupFolder := fs.CreateSecureFolder(path.Join(baseFolder, GroupFolderName))
+	groupFolder := fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName, groupID, GroupFolderName))
+
 	store.privateKeyFile = path.Join(keyFolder, keyFileName) + privateExtension
 	store.publicKeyFile = path.Join(keyFolder, keyFileName) + publicExtension
 	store.groupFile = path.Join(groupFolder, groupFileName)

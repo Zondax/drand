@@ -173,6 +173,7 @@ func leadShareCmd(c *cli.Context) error {
 	beaconID := c.String(beaconIDFlag.Name)
 
 	str1 := fmt.Sprintf("Initiating the DKG as a leader. Beacon ID: [%s]", beaconID)
+
 	fmt.Fprintln(output, str1)
 	fmt.Fprintln(output, "You can stop the command at any point. If so, the group "+
 		"file will not be written out to the specified output. To get the "+
@@ -478,7 +479,7 @@ func entropyInfoFromReader(c *cli.Context) (*control.EntropyInfo, error) {
 }
 func selfSign(c *cli.Context) error {
 	conf := contextToConfig(c)
-	fs := key.NewFileStore(conf.ConfigFolder())
+	fs := key.NewFileStore(conf.ConfigFolder(), "default")
 	pair, err := fs.LoadKeyPair()
 	if err != nil {
 		return fmt.Errorf("loading private/public: %s", err)

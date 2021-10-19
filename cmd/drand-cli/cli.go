@@ -502,7 +502,7 @@ func resetCmd(c *cli.Context) error {
 		fmt.Fprintf(output, "drand: not reseting the state.")
 		return nil
 	}
-	store := key.NewFileStore(conf.ConfigFolder())
+	store := key.NewFileStore(conf.ConfigFolder(), "default")
 	if err := store.Reset(); err != nil {
 		fmt.Fprintf(output, "drand: err reseting key store: %v\n", err)
 		os.Exit(1)
@@ -562,7 +562,7 @@ func keygenCmd(c *cli.Context) error {
 	}
 
 	config := contextToConfig(c)
-	fileStore := key.NewFileStore(config.ConfigFolder())
+	fileStore := key.NewFileStore(config.ConfigFolder(), "default")
 
 	if _, err := fileStore.LoadKeyPair(); err == nil {
 		fmt.Fprintf(output, "Keypair already present in `%s`.\nRemove them before generating new one\n", config.ConfigFolder())
