@@ -267,6 +267,12 @@ var beaconIDFlag = &cli.StringFlag{
 	Value: "",
 }
 
+var allBeaconsFlag = &cli.BoolFlag{
+	Name:  "all",
+	Usage: "Indicates if we have to reset all beacons chains",
+	Value: false,
+}
+
 var appCommands = []*cli.Command{
 	{
 		Name:  "start",
@@ -395,7 +401,7 @@ var appCommands = []*cli.Command{
 			{
 				Name:   "reset",
 				Usage:  "Resets the local distributed information (share, group file and random beacons). It KEEPS the private/public key pair.",
-				Flags:  toArray(folderFlag, controlFlag),
+				Flags:  toArray(folderFlag, controlFlag, beaconIDFlag, allBeaconsFlag),
 				Action: resetCmd,
 			},
 			{
@@ -490,28 +496,50 @@ func CLI() *cli.App {
 
 func resetCmd(c *cli.Context) error {
 	conf := contextToConfig(c)
+
 	fmt.Fprintf(output, "You are about to delete your local share, group file and generated random beacons. "+
 		"Are you sure you wish to perform this operation? [y/N]")
 	reader := bufio.NewReader(os.Stdin)
+
 	answer, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("error reading: %s", err)
 	}
+
 	answer = strings.ToLower(strings.TrimSpace(answer))
 	if answer != "y" {
 		fmt.Fprintf(output, "drand: not reseting the state.")
 		return nil
 	}
-	store := key.NewFileStore(conf.ConfigFolder(), "default")
-	if err := store.Reset(); err != nil {
-		fmt.Fprintf(output, "drand: err reseting key store: %v\n", err)
-		os.Exit(1)
+
+	var stores map[string]key.Store
+
+	if c.IsSet(allBeaconsFlag.Name) {
+		stores = key.NewFileStores(conf.ConfigFolder())
+	} else {
+		beaconID := c.String(beaconIDFlag.Name)
+		if beaconID == "" {
+			beaconID = "default"
+		}
+
+		store := key.NewFileStore(conf.ConfigFolder(), beaconID)
+		stores = map[string]key.Store{beaconID: store}
 	}
-	if err := os.RemoveAll(conf.DBFolder()); err != nil {
-		fmt.Fprintf(output, "drand: err reseting beacons database: %v\n", err)
-		os.Exit(1)
+
+	for key, store := range stores {
+		if err := store.Reset(); err != nil {
+			fmt.Fprintf(output, "drand: err reseting key store [%s]: %v\n", key, err)
+			os.Exit(1)
+		}
+
+		if err := os.RemoveAll(path.Join(conf.DBFolder(), key)); err != nil {
+			fmt.Fprintf(output, "drand: err reseting beacons database [%s]: %v\n", key, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("drand: [%s] database reset\n", key)
 	}
-	fmt.Println("drand: database reset")
+
 	return nil
 }
 
@@ -546,12 +574,14 @@ func keygenCmd(c *cli.Context) error {
 	if !args.Present() {
 		return errors.New("missing drand address in argument. Abort")
 	}
+
 	addr := args.First()
 	var validID = regexp.MustCompile(`:\d+$`)
 	if !validID.MatchString(addr) {
 		fmt.Println("Invalid port.")
 		addr = addr + ":" + askPort()
 	}
+
 	var priv *key.Pair
 	if c.Bool(insecureFlag.Name) {
 		fmt.Println("Generating private / public key pair without TLS.")
@@ -562,6 +592,8 @@ func keygenCmd(c *cli.Context) error {
 	}
 
 	config := contextToConfig(c)
+
+	// Keys are the same for all beacons, that is why storeID is not important here. It won't be used
 	fileStore := key.NewFileStore(config.ConfigFolder(), "default")
 
 	if _, err := fileStore.LoadKeyPair(); err == nil {
@@ -571,12 +603,15 @@ func keygenCmd(c *cli.Context) error {
 	if err := fileStore.SaveKeyPair(priv); err != nil {
 		return fmt.Errorf("could not save key: %s", err)
 	}
+
 	fullpath := path.Join(config.ConfigFolder(), key.KeyFolderName)
 	absPath, err := filepath.Abs(fullpath)
+
 	if err != nil {
 		return fmt.Errorf("err getting full path: %s", err)
 	}
 	fmt.Println("Generated keys at ", absPath)
+
 	var buff bytes.Buffer
 	if err := toml.NewEncoder(&buff).Encode(priv.Public.TOML()); err != nil {
 		panic(err)

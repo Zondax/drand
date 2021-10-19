@@ -17,7 +17,7 @@ func TestKeysSaveLoad(t *testing.T) {
 	tmp = path.Join(tmp, "drand-key")
 	os.RemoveAll(tmp)
 	defer os.RemoveAll(tmp)
-	store := NewFileStore(tmp).(*fileStore)
+	store := NewFileStore(tmp, "").(*fileStore)
 	require.Equal(t, tmp, store.baseFolder)
 
 	// test loading saving private public key

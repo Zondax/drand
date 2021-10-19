@@ -124,7 +124,6 @@ func MoveFile(origFilePath, destFilePath string) {
 	if err := os.Rename(origFilePath, destFilePath); err != nil {
 		panic(err)
 	}
-
 }
 
 func MoveFolder(origFolderPath, destFolderPath string) error {
@@ -141,11 +140,13 @@ func MoveFolder(origFolderPath, destFolderPath string) error {
 			MoveFile(tmp1, tmp2)
 		} else {
 			CreateSecureFolder(tmp2)
-			MoveFolder(tmp1, tmp2)
+			if err := MoveFolder(tmp1, tmp2); err != nil {
+				return err
+			}
 		}
 	}
 
-	if err = os.Remove(origFolderPath); err != nil {
+	if err := os.RemoveAll(origFolderPath); err != nil {
 		return err
 	}
 

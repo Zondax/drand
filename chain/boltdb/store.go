@@ -3,8 +3,11 @@ package boltdb
 import (
 	"errors"
 	"io"
+	"os"
 	"path"
 	"sync"
+
+	"github.com/drand/drand/fs"
 
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
@@ -24,7 +27,20 @@ var beaconBucket = []byte("beacons")
 // BoltFileName is the name of the file boltdb writes to
 const BoltFileName = "drand.db"
 
+// BoltStoreOpenPerm is the permission we will use to read bolt store file from disk
 const BoltStoreOpenPerm = 0660
+
+func MigrateOldFolderStructure(folder, storeID string) error {
+	oldFilePath := path.Join(folder, BoltFileName)
+	if fs.FileExists(folder, oldFilePath) {
+		newFilePath := path.Join(folder, storeID, BoltFileName)
+
+		fs.MoveFile(oldFilePath, newFilePath)
+		return os.RemoveAll(path.Join(folder, BoltFileName))
+	}
+
+	return nil
+}
 
 // NewBoltStore returns a Store implementation using the boltdb storage engine.
 func NewBoltStore(folder string, opts *bolt.Options) (chain.Store, error) {

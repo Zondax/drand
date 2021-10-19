@@ -12,25 +12,26 @@ import (
 
 func startCmd(c *cli.Context) error {
 	conf := contextToConfig(c)
-	fs := key.NewFileStores(conf.ConfigFolder())
+	stores := key.NewFileStores(conf.ConfigFolder())
 	var drand *core.Drand
 
 	// determine if we already ran a DKG or not
-	_, errG := fs["default"].LoadGroup()
-	_, errS := fs["default"].LoadShare()
+	key, fs := key.GetFirstStore(stores)
+	_, errG := fs.LoadGroup()
+	_, errS := fs.LoadShare()
 
 	// XXX place that logic inside core/ directly with only one method
 	freshRun := errG != nil || errS != nil
 	var err error
 	if freshRun {
 		fmt.Println("drand: will run as fresh install -> expect to run DKG.")
-		drand, err = core.NewDrand(fs["default"], conf)
+		drand, err = core.NewDrand(fs, conf)
 		if err != nil {
 			return fmt.Errorf("can't instantiate drand instance %s", err)
 		}
 	} else {
-		fmt.Println("drand: will already start running randomness beacon")
-		drand, err = core.LoadDrand(fs["default"], conf)
+		fmt.Printf("drand: will already start running randomness beacon. BeaconID: [%s]\n", key)
+		drand, err = core.LoadDrand(fs, conf)
 		if err != nil {
 			return fmt.Errorf("can't load drand instance %s", err)
 		}

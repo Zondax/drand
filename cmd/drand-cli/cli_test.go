@@ -97,7 +97,7 @@ func TestKeySelfSign(t *testing.T) {
 	testCommand(t, selfSign, expectedOutput)
 
 	// load, remove signature and save
-	fileStore := key.NewFileStore(tmp)
+	fileStore := key.NewFileStore(tmp, "default")
 	pair, err := fileStore.LoadKeyPair()
 	require.NoError(t, err)
 	pair.Public.Signature = nil
@@ -114,7 +114,7 @@ func TestKeyGen(t *testing.T) {
 	require.NoError(t, CLI().Run(args))
 
 	config := core.NewConfig(core.WithConfigFolder(tmp))
-	fileStore := key.NewFileStore(config.ConfigFolder())
+	fileStore := key.NewFileStore(config.ConfigFolder(), "default")
 	priv, err := fileStore.LoadKeyPair()
 	require.NoError(t, err)
 	require.NotNil(t, priv.Public)
@@ -125,7 +125,7 @@ func TestKeyGen(t *testing.T) {
 	require.Error(t, CLI().Run(args))
 
 	config = core.NewConfig(core.WithConfigFolder(tmp2))
-	fileStore = key.NewFileStore(config.ConfigFolder())
+	fileStore = key.NewFileStore(config.ConfigFolder(), "default")
 	priv, err = fileStore.LoadKeyPair()
 	require.Error(t, err)
 	require.Nil(t, priv)
@@ -224,7 +224,7 @@ func TestStartWithoutGroup(t *testing.T) {
 	require.NoError(t, key.Save(pubPath, priv.Public, false))
 
 	config := core.NewConfig(core.WithConfigFolder(tmpPath))
-	fileStore := key.NewFileStore(config.ConfigFolder())
+	fileStore := key.NewFileStore(config.ConfigFolder(), "")
 	require.NoError(t, fileStore.SaveKeyPair(priv))
 
 	startArgs := []string{
@@ -406,7 +406,7 @@ func TestClientTLS(t *testing.T) {
 	require.NoError(t, key.Save(pubPath, priv.Public, false))
 
 	config := core.NewConfig(core.WithConfigFolder(tmpPath))
-	fileStore := key.NewFileStore(config.ConfigFolder())
+	fileStore := key.NewFileStore(config.ConfigFolder(), "")
 	fileStore.SaveKeyPair(priv)
 
 	if httpscerts.Check(certPath, keyPath) != nil {

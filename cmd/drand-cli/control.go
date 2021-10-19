@@ -479,8 +479,11 @@ func entropyInfoFromReader(c *cli.Context) (*control.EntropyInfo, error) {
 }
 func selfSign(c *cli.Context) error {
 	conf := contextToConfig(c)
+
+	// Keys are the same for all beacons, that is why storeID is not important here. It won't be used
 	fs := key.NewFileStore(conf.ConfigFolder(), "default")
 	pair, err := fs.LoadKeyPair()
+
 	if err != nil {
 		return fmt.Errorf("loading private/public: %s", err)
 	}
@@ -488,10 +491,12 @@ func selfSign(c *cli.Context) error {
 		fmt.Fprintln(output, "Public identity already self signed.")
 		return nil
 	}
+
 	pair.SelfSign()
 	if err := fs.SaveKeyPair(pair); err != nil {
 		return fmt.Errorf("saving identity: %s", err)
 	}
+
 	fmt.Fprintln(output, "Public identity self signed")
 	fmt.Fprintln(output, printJSON(pair.Public.TOML()))
 	return nil

@@ -65,7 +65,7 @@ type fileStore struct {
 	groupFile      string
 }
 
-func CheckPreConditions(baseFolder string) {
+func MigrateOldFolderStructure(baseFolder string) {
 	// config folder
 	if fs.CreateSecureFolder(baseFolder) == "" {
 		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
@@ -77,23 +77,27 @@ func CheckPreConditions(baseFolder string) {
 		os.Exit(1)
 	}
 
-	isPrev, err := CheckPrevStructureForStoreFolder(baseFolder)
+	isRequired, err := CheckOldFolderStructMigration(baseFolder)
 	if err != nil {
-		fmt.Println("")
+		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
 		os.Exit(1)
 	}
 
-	if isPrev {
+	if isRequired {
 		if fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName)) == "" {
 			fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
 			os.Exit(1)
 		}
 
-		fs.MoveFolder(path.Join(baseFolder, GroupFolderName), path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName))
+		if err := fs.MoveFolder(path.Join(baseFolder, GroupFolderName),
+			path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName)); err != nil {
+			fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
+			os.Exit(1)
+		}
 	}
 }
 
-func CheckPrevStructureForStoreFolder(baseFolder string) (bool, error) {
+func CheckOldFolderStructMigration(baseFolder string) (bool, error) {
 	folders, err := fs.Folders(baseFolder)
 	if err != nil {
 		return false, err
@@ -112,12 +116,18 @@ func CheckPrevStructureForStoreFolder(baseFolder string) (bool, error) {
 	return found, nil
 }
 
-// NewFileStore is used to create the config folder and all the subfolders.
-// If a folder alredy exists, we simply check the rights
-func NewFileStores(baseFolder string) map[string]Store {
-	CheckPreConditions(baseFolder)
+func GetFirstStore(stores map[string]Store) (string, Store) {
+	for k, v := range stores {
+		return k, v
+	}
+	return "", nil
+}
 
-	fileStores := make(map[string]Store, 0)
+// NewFileStores
+func NewFileStores(baseFolder string) map[string]Store {
+	MigrateOldFolderStructure(baseFolder)
+
+	fileStores := make(map[string]Store)
 	fi, err := ioutil.ReadDir(path.Join(baseFolder, BeaconsFolderName))
 	if err != nil {
 		return fileStores
@@ -138,7 +148,7 @@ func NewFileStores(baseFolder string) map[string]Store {
 
 // NewFileStore is used to create the config folder and all the subfolders.
 // If a folder alredy exists, we simply check the rights
-func NewFileStore(baseFolder string, groupID string) Store {
+func NewFileStore(baseFolder, groupID string) Store {
 	store := &fileStore{baseFolder: baseFolder, groupID: groupID}
 
 	keyFolder := fs.CreateSecureFolder(path.Join(baseFolder, KeyFolderName))
