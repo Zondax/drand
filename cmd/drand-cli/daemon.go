@@ -16,7 +16,7 @@ func startCmd(c *cli.Context) error {
 	var drand *core.Drand
 
 	// determine if we already ran a DKG or not
-	key, fs := key.GetFirstStore(stores)
+	beaconID, fs := key.GetFirstStore(stores)
 	_, errG := fs.LoadGroup()
 	_, errS := fs.LoadShare()
 
@@ -30,7 +30,7 @@ func startCmd(c *cli.Context) error {
 			return fmt.Errorf("can't instantiate drand instance %s", err)
 		}
 	} else {
-		fmt.Printf("drand: will already start running randomness beacon. BeaconID: [%s]\n", key)
+		fmt.Printf("drand: will already start running randomness beacon. BeaconID: [%s]\n", beaconID)
 		drand, err = core.LoadDrand(fs, conf)
 		if err != nil {
 			return fmt.Errorf("can't load drand instance %s", err)
