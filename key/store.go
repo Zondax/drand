@@ -7,6 +7,8 @@ import (
 	"path"
 	"reflect"
 
+	"github.com/drand/drand/common/constants"
+
 	"github.com/BurntSushi/toml"
 	"github.com/drand/drand/fs"
 )
@@ -27,11 +29,6 @@ type Store interface {
 	LoadGroup() (*Group, error)
 	Reset(...ResetOption) error
 }
-
-//
-const DefaultStoreID = "default"
-
-const BeaconsFolderName = "beacons"
 
 // KeyFolderName is the name of the folder where drand keeps its keys
 const KeyFolderName = "key"
@@ -65,57 +62,6 @@ type fileStore struct {
 	groupFile      string
 }
 
-func MigrateOldFolderStructure(baseFolder string) {
-	// config folder
-	if fs.CreateSecureFolder(baseFolder) == "" {
-		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
-		os.Exit(1)
-	}
-
-	if fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName)) == "" {
-		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
-		os.Exit(1)
-	}
-
-	isRequired, err := CheckOldFolderStructMigration(baseFolder)
-	if err != nil {
-		fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
-		os.Exit(1)
-	}
-
-	if isRequired {
-		if fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName)) == "" {
-			fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
-			os.Exit(1)
-		}
-
-		if err := fs.MoveFolder(path.Join(baseFolder, GroupFolderName),
-			path.Join(baseFolder, BeaconsFolderName, DefaultStoreID, GroupFolderName)); err != nil {
-			fmt.Println("Something went wrong with the config folder. Make sure that you have the appropriate rights.")
-			os.Exit(1)
-		}
-	}
-}
-
-func CheckOldFolderStructMigration(baseFolder string) (bool, error) {
-	folders, err := fs.Folders(baseFolder)
-	if err != nil {
-		return false, err
-	}
-
-	found := false
-	groupFolderPath := path.Join(baseFolder, GroupFolderName)
-
-	for _, folderPath := range folders {
-		if groupFolderPath == folderPath {
-			found = true
-			break
-		}
-	}
-
-	return found, nil
-}
-
 func GetFirstStore(stores map[string]Store) (string, Store) {
 	for k, v := range stores {
 		return k, v
@@ -124,13 +70,11 @@ func GetFirstStore(stores map[string]Store) (string, Store) {
 }
 
 // NewFileStores
-func NewFileStores(baseFolder string) map[string]Store {
-	MigrateOldFolderStructure(baseFolder)
-
+func NewFileStores(baseFolder string) (map[string]Store, error) {
 	fileStores := make(map[string]Store)
-	fi, err := ioutil.ReadDir(path.Join(baseFolder, BeaconsFolderName))
+	fi, err := ioutil.ReadDir(path.Join(baseFolder))
 	if err != nil {
-		return fileStores
+		return nil, err
 	}
 
 	for _, f := range fi {
@@ -140,19 +84,23 @@ func NewFileStores(baseFolder string) map[string]Store {
 	}
 
 	if len(fileStores) == 0 {
-		fileStores[DefaultStoreID] = NewFileStore(baseFolder, DefaultStoreID)
+		fileStores[constants.DefaultBeaconID] = NewFileStore(baseFolder, constants.DefaultBeaconID)
 	}
 
-	return fileStores
+	return fileStores, nil
 }
 
 // NewFileStore is used to create the config folder and all the subfolders.
 // If a folder alredy exists, we simply check the rights
-func NewFileStore(baseFolder, groupID string) Store {
-	store := &fileStore{baseFolder: baseFolder, groupID: groupID}
+func NewFileStore(baseFolder, beaconID string) Store {
+	if beaconID == "" {
+		beaconID = constants.DefaultBeaconID
+	}
 
-	keyFolder := fs.CreateSecureFolder(path.Join(baseFolder, KeyFolderName))
-	groupFolder := fs.CreateSecureFolder(path.Join(baseFolder, BeaconsFolderName, groupID, GroupFolderName))
+	store := &fileStore{baseFolder: baseFolder, groupID: beaconID}
+
+	keyFolder := fs.CreateSecureFolder(path.Join(baseFolder, beaconID, KeyFolderName))
+	groupFolder := fs.CreateSecureFolder(path.Join(baseFolder, beaconID, GroupFolderName))
 
 	store.privateKeyFile = path.Join(keyFolder, keyFileName) + privateExtension
 	store.publicKeyFile = path.Join(keyFolder, keyFileName) + publicExtension

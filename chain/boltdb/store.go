@@ -30,13 +30,13 @@ const BoltFileName = "drand.db"
 // BoltStoreOpenPerm is the permission we will use to read bolt store file from disk
 const BoltStoreOpenPerm = 0660
 
-func MigrateOldFolderStructure(folder, storeID string) error {
-	oldFilePath := path.Join(folder, BoltFileName)
+func MigrateOldFolderStructure(folder, dbFolder, storeID string) error {
+	oldFilePath := path.Join(folder, dbFolder, BoltFileName)
 	if fs.FileExists(folder, oldFilePath) {
-		newFilePath := path.Join(folder, storeID, BoltFileName)
+		newFilePath := path.Join(folder, storeID, dbFolder, BoltFileName)
 
 		fs.MoveFile(oldFilePath, newFilePath)
-		return os.RemoveAll(path.Join(folder, BoltFileName))
+		return os.RemoveAll(path.Join(folder, dbFolder))
 	}
 
 	return nil

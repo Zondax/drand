@@ -323,12 +323,9 @@ func (d *Drand) createBoltStore(dbName string) (chain.Store, error) {
 	if dbName == "" {
 		dbName = "default"
 	}
-	dbPath := path.Join(d.opts.DBFolder(), dbName)
 
+	dbPath := path.Join(d.opts.ConfigFolder(), dbName, DefaultDBFolder)
 	fs.CreateSecureFolder(dbPath)
-	if err := boltdb.MigrateOldFolderStructure(d.opts.DBFolder(), dbName); err != nil {
-		return nil, err
-	}
 
 	return boltdb.NewBoltStore(dbPath, d.opts.boltOpts)
 }
