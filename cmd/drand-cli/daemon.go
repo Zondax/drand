@@ -3,6 +3,8 @@ package drand
 import (
 	"fmt"
 
+	"github.com/drand/drand/common/migration"
+
 	"github.com/drand/drand/core"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/metrics"
@@ -12,7 +14,14 @@ import (
 
 func startCmd(c *cli.Context) error {
 	conf := contextToConfig(c)
-	stores := key.NewFileStores(conf.ConfigFolder())
+
+	migration.MigrateOldFolderStructure(conf.ConfigFolder())
+
+	stores, err := key.NewFileStores(conf.ConfigFolder())
+	if err != nil {
+		return fmt.Errorf("can't read file stores %s", err)
+	}
+
 	var drand *core.Drand
 
 	// determine if we already ran a DKG or not
@@ -22,7 +31,7 @@ func startCmd(c *cli.Context) error {
 
 	// XXX place that logic inside core/ directly with only one method
 	freshRun := errG != nil || errS != nil
-	var err error
+
 	if freshRun {
 		fmt.Println("drand: will run as fresh install -> expect to run DKG.")
 		drand, err = core.NewDrand(fs, conf)
