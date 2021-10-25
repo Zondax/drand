@@ -12,8 +12,8 @@ import (
 	"github.com/drand/drand/fs"
 )
 
-// CheckSBFolderStructure checks if the file structure is single-beacon drand version or not
-func CheckSBFolderStructure(baseFolder string) bool {
+// CheckOldFolderStructure checks if the file structure is drand-single-beacon version or not
+func CheckOldFolderStructure(baseFolder string) bool {
 	groupFolderPath := path.Join(baseFolder, key.GroupFolderName)
 	keyFolderPath := path.Join(baseFolder, key.KeyFolderName)
 	dbFolderPath := path.Join(baseFolder, core.DefaultDBFolder)
