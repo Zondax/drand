@@ -73,6 +73,29 @@ jobs:
       - name: Integration tests
         run: SCHEME_ID=pedersen-bls-unchained make test-integration
 
+  test_unchained_test_beacon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.17'
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - run: go get -v -t -d ./...
+      - name: Unit tests
+        run: SCHEME_ID=pedersen-bls-unchained BEACON_ID=test_beacon make test-unit
+      - name: Integration tests
+        run: SCHEME_ID=pedersen-bls-unchained BEACON_ID=test_beacon make test-integration
+
   coverage:
     runs-on: ubuntu-latest
     env:
