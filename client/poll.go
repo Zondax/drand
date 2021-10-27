@@ -11,9 +11,10 @@ import (
 // PollingWatcher generalizes the `Watch` interface for clients which learn new values
 // by asking for them once each group period.
 func PollingWatcher(ctx context.Context, c Client, chainInfo *chain.Info, l log.Logger) <-chan Result {
+	chainHash := chainInfo.Hash()
 	ch := make(chan Result, 1)
-	r := c.RoundAt(time.Now())
-	val, err := c.Get(ctx, r)
+	r := c.RoundAt(time.Now(), chainHash)
+	val, err := c.Get(ctx, chainHash, r)
 	if err != nil {
 		l.Errorw("", "polling_client", "failed synchronous get", "from", c, "err", err)
 		close(ch)
@@ -32,7 +33,7 @@ func PollingWatcher(ctx context.Context, c Client, chainInfo *chain.Info, l log.
 		case <-time.After(time.Duration(nextTime-time.Now().Unix()) * time.Second):
 		}
 
-		r, err := c.Get(ctx, c.RoundAt(time.Now()))
+		r, err := c.Get(ctx, chainHash, c.RoundAt(time.Now(), chainHash))
 		if err == nil {
 			ch <- r
 		} else {
@@ -45,7 +46,7 @@ func PollingWatcher(ctx context.Context, c Client, chainInfo *chain.Info, l log.
 		for {
 			select {
 			case <-t.C:
-				r, err := c.Get(ctx, c.RoundAt(time.Now()))
+				r, err := c.Get(ctx, chainHash, c.RoundAt(time.Now(), chainHash))
 				if err == nil {
 					ch <- r
 				} else {

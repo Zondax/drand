@@ -5,6 +5,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/drand/drand/protobuf/common"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/protobuf/drand"
@@ -30,8 +32,9 @@ func (d *drandProxy) String() string {
 }
 
 // Get returns randomness at a requested round
-func (d *drandProxy) Get(ctx context.Context, round uint64) (client.Result, error) {
-	resp, err := d.r.PublicRand(ctx, &drand.PublicRandRequest{Round: round})
+func (d *drandProxy) Get(ctx context.Context, chainHash []byte, round uint64) (client.Result, error) {
+	metadata := common.Metadata{ChainHash: chainHash}
+	resp, err := d.r.PublicRand(ctx, &drand.PublicRandRequest{Round: round, Metadata: &metadata})
 	if err != nil {
 		return nil, err
 	}
@@ -44,10 +47,11 @@ func (d *drandProxy) Get(ctx context.Context, round uint64) (client.Result, erro
 }
 
 // Watch returns new randomness as it becomes available.
-func (d *drandProxy) Watch(ctx context.Context) <-chan client.Result {
+func (d *drandProxy) Watch(ctx context.Context, chainHash []byte) <-chan client.Result {
+	metadata := common.Metadata{ChainHash: chainHash}
 	proxy := newStreamProxy(ctx)
 	go func() {
-		err := d.r.PublicRandStream(&drand.PublicRandRequest{}, proxy)
+		err := d.r.PublicRandStream(&drand.PublicRandRequest{Metadata: &metadata}, proxy)
 		if err != nil {
 			proxy.Close(err)
 		}
@@ -57,8 +61,9 @@ func (d *drandProxy) Watch(ctx context.Context) <-chan client.Result {
 
 // Info returns the parameters of the chain this client is connected to.
 // The public key, when it started, and how frequently it updates.
-func (d *drandProxy) Info(ctx context.Context) (*chain.Info, error) {
-	info, err := d.r.ChainInfo(ctx, &drand.ChainInfoRequest{})
+func (d *drandProxy) Info(ctx context.Context, chainHash []byte) (*chain.Info, error) {
+	metadata := common.Metadata{ChainHash: chainHash}
+	info, err := d.r.ChainInfo(ctx, &drand.ChainInfoRequest{Metadata: &metadata})
 	if err != nil {
 		return nil, err
 	}
@@ -67,10 +72,10 @@ func (d *drandProxy) Info(ctx context.Context) (*chain.Info, error) {
 
 // RoundAt will return the most recent round of randomness that will be available
 // at time for the current client.
-func (d *drandProxy) RoundAt(t time.Time) uint64 {
+func (d *drandProxy) RoundAt(t time.Time, chainHash []byte) uint64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	info, err := d.Info(ctx)
+	info, err := d.Info(ctx, chainHash)
 	if err != nil {
 		return 0
 	}

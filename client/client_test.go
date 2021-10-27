@@ -57,7 +57,7 @@ func TestClientMultiple(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := c.Get(context.Background(), 0)
+	r, e := c.Get(context.Background(), nil, 0)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -80,7 +80,7 @@ func TestClientWithChainInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal("existing group creation shouldn't do additional validaiton.")
 	}
-	_, err = c.Get(context.Background(), 0)
+	_, err = c.Get(context.Background(), nil, 0)
 	if err == nil {
 		t.Fatal("bad urls should clearly not provide randomness.")
 	}
@@ -101,17 +101,17 @@ func TestClientCache(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r0, e := c.Get(context.Background(), 0)
+	r0, e := c.Get(context.Background(), chainInfo.Hash(), 0)
 	if e != nil {
 		t.Fatal(e)
 	}
 	cancel()
-	_, e = c.Get(context.Background(), r0.Round())
+	_, e = c.Get(context.Background(), chainInfo.Hash(), r0.Round())
 	if e != nil {
 		t.Fatal(e)
 	}
 
-	_, e = c.Get(context.Background(), 4)
+	_, e = c.Get(context.Background(), chainInfo.Hash(), 4)
 	if e == nil {
 		t.Fatal("non-cached results should fail.")
 	}
@@ -133,12 +133,12 @@ func TestClientWithoutCache(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = c.Get(context.Background(), 0)
+	_, e = c.Get(context.Background(), chainInfo.Hash(), 0)
 	if e != nil {
 		t.Fatal(e)
 	}
 	cancel()
-	_, e = c.Get(context.Background(), 0)
+	_, e = c.Get(context.Background(), chainInfo.Hash(), 0)
 	if e == nil {
 		t.Fatal("cache should be disabled.")
 	}
@@ -173,7 +173,7 @@ func TestClientWithWatcher(t *testing.T) {
 	i := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for r := range c.Watch(ctx) {
+	for r := range c.Watch(ctx, info.Hash()) {
 		compareResults(t, r, &results[i])
 		i++
 		if i == len(results) {
@@ -230,8 +230,8 @@ func TestClientAutoWatch(t *testing.T) {
 	defer cancel()
 
 	httpClient := http.ForURLs([]string{"http://" + addr1}, chainInfo.Hash())
-	r1, _ := httpClient[0].Get(context.Background(), 1)
-	r2, _ := httpClient[0].Get(context.Background(), 2)
+	r1, _ := httpClient[0].Get(context.Background(), chainInfo.Hash(), 1)
+	r2, _ := httpClient[0].Get(context.Background(), chainInfo.Hash(), 2)
 	results := []client.Result{r1, r2}
 
 	ch := make(chan client.Result, len(results))
@@ -259,7 +259,7 @@ func TestClientAutoWatch(t *testing.T) {
 
 	time.Sleep(chainInfo.Period)
 	cancel()
-	r, err := c.Get(context.Background(), results[0].Round())
+	r, err := c.Get(context.Background(), chainInfo.Hash(), results[0].Round())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestClientAutoWatchRetry(t *testing.T) {
 
 	// We should be able to retrieve all the results from the cache.
 	for i := range results {
-		r, err := c.Get(context.Background(), results[i].Round())
+		r, err := c.Get(context.Background(), info.Hash(), results[i].Round())
 		if err != nil {
 			t.Fatal(err)
 		}

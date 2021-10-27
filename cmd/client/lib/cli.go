@@ -166,7 +166,7 @@ func buildGrpcClient(c *cli.Context, info **chain.Info) ([]client.Client, error)
 			}
 		}
 
-		gc, err := grpc.New(c.String(GRPCConnectFlag.Name), c.String(CertFlag.Name), c.Bool(InsecureFlag.Name))
+		gc, err := grpc.New(c.String(GRPCConnectFlag.Name), c.String(CertFlag.Name), c.Bool(InsecureFlag.Name), hash)
 		if err != nil {
 			return nil, err
 		}

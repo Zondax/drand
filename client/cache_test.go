@@ -18,29 +18,29 @@ func TestCacheGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, e := c.Get(context.Background(), 1)
+	res, e := c.Get(context.Background(), nil, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
 	res.(*mock.Result).AssertValid(t)
 
-	_, e = c.Get(context.Background(), 1)
+	_, e = c.Get(context.Background(), nil, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
 	if len(m.Results) < 4 {
 		t.Fatal("multiple gets should cache.")
 	}
-	_, e = c.Get(context.Background(), 2)
+	_, e = c.Get(context.Background(), nil, 2)
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = c.Get(context.Background(), 3)
+	_, e = c.Get(context.Background(), nil, 3)
 	if e != nil {
 		t.Fatal(e)
 	}
 
-	_, e = c.Get(context.Background(), 1)
+	_, e = c.Get(context.Background(), nil, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -60,11 +60,11 @@ func TestCacheGetLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r0, e := c.Get(context.Background(), 0)
+	r0, e := c.Get(context.Background(), nil, 0)
 	if e != nil {
 		t.Fatal(e)
 	}
-	r1, e := c.Get(context.Background(), 0)
+	r1, e := c.Get(context.Background(), nil, 0)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -86,14 +86,14 @@ func TestCacheWatch(t *testing.T) {
 	c := newWatchAggregator(cache, nil, false, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	r1 := c.Watch(ctx)
+	r1 := c.Watch(ctx, nil)
 	rc <- &mock.Result{Rnd: 1, Rand: []byte{1}}
 	_, ok := <-r1
 	if !ok {
 		t.Fatal("results should propagate")
 	}
 
-	_, err = c.Get(context.Background(), 1)
+	_, err = c.Get(context.Background(), nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

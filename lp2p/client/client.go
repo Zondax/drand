@@ -150,7 +150,7 @@ func (c *Client) Sub(ch chan drand.PublicRandResponse) UnsubFunc {
 }
 
 // Watch implements the client.Watcher interface
-func (c *Client) Watch(ctx context.Context) <-chan client.Result {
+func (c *Client) Watch(ctx context.Context, _ []byte) <-chan client.Result {
 	innerCh := make(chan drand.PublicRandResponse)
 	outerCh := make(chan client.Result)
 	end := c.Sub(innerCh)

@@ -96,7 +96,7 @@ var runCmd = &cli.Command{
 
 		chainHash := cctx.String(lib.HashFlag.Name)
 		if chainHash == "" {
-			info, err := c.Info(context.Background())
+			info, err := c.Info(context.Background(), nil)
 			if err != nil {
 				return xerrors.Errorf("getting chain info: %w", err)
 			}
@@ -128,7 +128,7 @@ var clientCmd = &cli.Command{
 			return xerrors.Errorf("constructing client: %w", err)
 		}
 
-		for rand := range c.Watch(context.Background()) {
+		for rand := range c.Watch(context.Background(), nil) {
 			log.DefaultLogger().Infow("", "client", "got randomness", "round", rand.Round(), "signature", rand.Signature()[:16])
 		}
 

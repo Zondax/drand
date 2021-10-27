@@ -136,7 +136,7 @@ func (g *GossipRelayNode) background(w client.Watcher) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
-		results := w.Watch(ctx)
+		results := w.Watch(ctx, nil)
 	LOOP:
 		for {
 			select {

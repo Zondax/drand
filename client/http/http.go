@@ -97,7 +97,7 @@ func ForURLs(urls []string, chainHash []byte) []client.Client {
 			if c, err := New(u, chainHash, nil); err == nil {
 				// Note: this wrapper assumes the current behavior that if `New` succeeds,
 				// Info will have been fetched.
-				info, _ = c.Info(context.Background())
+				info, _ = c.Info(context.Background(), chainHash)
 				clients = append(clients, c)
 			} else {
 				skipped = append(skipped, u)
@@ -295,12 +295,12 @@ type httpGetResponse struct {
 }
 
 // Get returns a the randomness at `round` or an error.
-func (h *httpClient) Get(ctx context.Context, round uint64) (client.Result, error) {
+func (h *httpClient) Get(ctx context.Context, chainHash []byte, round uint64) (client.Result, error) {
 	var url string
 	if round == 0 {
-		url = fmt.Sprintf("%spublic/latest", h.root)
+		url = fmt.Sprintf("%spublic/latest/%x", h.root, chainHash)
 	} else {
-		url = fmt.Sprintf("%spublic/%d", h.root, round)
+		url = fmt.Sprintf("%spublic/%d/%x", h.root, round, chainHash)
 	}
 
 	resC := make(chan httpGetResponse, 1)
@@ -347,7 +347,7 @@ func (h *httpClient) Get(ctx context.Context, round uint64) (client.Result, erro
 }
 
 // Watch returns new randomness as it becomes available.
-func (h *httpClient) Watch(ctx context.Context) <-chan client.Result {
+func (h *httpClient) Watch(ctx context.Context, chainHash []byte) <-chan client.Result {
 	out := make(chan client.Result)
 	go func() {
 		ctx, cancel := context.WithCancel(ctx)
@@ -371,13 +371,13 @@ func (h *httpClient) Watch(ctx context.Context) <-chan client.Result {
 }
 
 // Info returns information about the chain.
-func (h *httpClient) Info(ctx context.Context) (*chain.Info, error) {
+func (h *httpClient) Info(ctx context.Context, chainHash []byte) (*chain.Info, error) {
 	return h.chainInfo, nil
 }
 
 // RoundAt will return the most recent round of randomness that will be available
 // at time for the current client.
-func (h *httpClient) RoundAt(t time.Time) uint64 {
+func (h *httpClient) RoundAt(t time.Time, chainHash []byte) uint64 {
 	return chain.CurrentRound(t.Unix(), h.chainInfo.Period, h.chainInfo.GenesisTime)
 }
 

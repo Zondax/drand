@@ -45,7 +45,7 @@ func VerifyFuncTest(t *testing.T, clients, upTo int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := c.Get(context.Background(), results[upTo].Round())
+	res, err := c.Get(context.Background(), nil, results[upTo].Round())
 	if err != nil {
 		t.Fatal(err)
 	}

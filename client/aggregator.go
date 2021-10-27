@@ -83,7 +83,7 @@ func (c *watchAggregator) startAutoWatch(full bool) {
 		for {
 			var results <-chan Result
 			if full {
-				results = c.Watch(ctx)
+				results = c.Watch(ctx, nil)
 			} else if c.passiveClient != nil {
 				results = c.passiveWatch(ctx)
 			}
@@ -128,7 +128,7 @@ func (c *watchAggregator) passiveWatch(ctx context.Context) <-chan Result {
 	if len(c.subscribers) == 0 {
 		ctx, cancel := context.WithCancel(ctx)
 		c.cancelPassive = cancel
-		go c.sink(c.passiveClient.Watch(ctx), wc)
+		go c.sink(c.passiveClient.Watch(ctx, nil), wc)
 	} else {
 		// trigger the startAutowatch to retry on backoff
 		close(wc)

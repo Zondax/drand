@@ -127,7 +127,7 @@ func Client(c *cli.Context) error {
 	if c.IsSet(roundFlag.Name) {
 		round = uint64(c.Int(roundFlag.Name))
 	}
-	rand, err := apiClient.Get(context.Background(), round)
+	rand, err := apiClient.Get(context.Background(), nil, round)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func Client(c *cli.Context) error {
 
 // Watch streams randomness from a client
 func Watch(inst client.Watcher) error {
-	results := inst.Watch(context.Background())
+	results := inst.Watch(context.Background(), nil)
 	for r := range results {
 		fmt.Printf("%d\t%x\n", r.Round(), r.Randomness())
 	}

@@ -73,7 +73,7 @@ func TestOptimizingGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
+	oc.Start(nil)
 	defer closeClient(t, oc)
 
 	waitForSpeedTest(t, oc, 10*time.Second)
@@ -103,12 +103,12 @@ func TestOptimizingWatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
+	oc.Start(nil)
 	defer closeClient(t, oc)
 
 	waitForSpeedTest(t, oc, time.Minute)
 
-	ch := oc.Watch(ctx)
+	ch := oc.Watch(ctx, nil)
 
 	expectRound(t, nextResult(t, ch), 1) // round 1 from c0 (after 100ms)
 	wc1 <- &mock.Result{Rnd: 2}
@@ -145,12 +145,12 @@ func TestOptimizingWatchRetryOnClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
+	oc.Start(nil)
 	defer closeClient(t, oc)
 
 	waitForSpeedTest(t, oc, time.Minute)
 
-	ch := oc.Watch(ctx)
+	ch := oc.Watch(ctx, nil)
 
 	var i uint64
 	for r := range ch {
@@ -196,12 +196,12 @@ func TestOptimizingWatchFailover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
+	oc.Start(nil)
 	defer closeClient(t, oc)
 
 	waitForSpeedTest(t, oc, time.Minute)
 
-	ch := oc.Watch(ctx)
+	ch := oc.Watch(ctx, nil)
 
 	var i uint64 = 1
 	for r := range ch {
@@ -239,7 +239,7 @@ func TestOptimizingIsCloser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
+	oc.Start(nil)
 	err = oc.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -252,8 +252,8 @@ func TestOptimizingInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
-	i, err := oc.Info(context.Background())
+	oc.Start(nil)
+	i, err := oc.Info(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,8 +267,8 @@ func TestOptimizingRoundAt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oc.Start()
-	r := oc.RoundAt(time.Now()) // mock client returns 0 always
+	oc.Start(nil)
+	r := oc.RoundAt(time.Now(), nil) // mock client returns 0 always
 	if r != 0 {
 		t.Fatal("unexpected round", r)
 	}

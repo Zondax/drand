@@ -24,7 +24,7 @@ func fakeChainInfo() *chain.Info {
 }
 
 func latestResult(t *testing.T, c Client) Result {
-	r, err := c.Get(context.Background(), 0)
+	r, err := c.Get(context.Background(), nil, 0)
 	if err != nil {
 		t.Fatal("getting latest result", err)
 	}

@@ -24,7 +24,7 @@ func TestWatcherWatch(t *testing.T) {
 	w := watcherClient{nil, &MockClient{WatchCh: ch}}
 
 	i := 0
-	for r := range w.Watch(context.Background()) {
+	for r := range w.Watch(context.Background(), nil) {
 		compareResults(t, r, &results[i])
 		i++
 	}
@@ -44,7 +44,7 @@ func TestWatcherGet(t *testing.T) {
 	w := watcherClient{c, c}
 
 	for i := range results {
-		r, err := w.Get(context.Background(), 0)
+		r, err := w.Get(context.Background(), nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func TestWatcherRoundAt(t *testing.T) {
 
 	w := watcherClient{c, c}
 
-	if w.RoundAt(time.Now()) != 0 {
+	if w.RoundAt(time.Now(), nil) != 0 {
 		t.Fatal("unexpected RoundAt value")
 	}
 }

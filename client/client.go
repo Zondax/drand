@@ -129,7 +129,7 @@ func makeOptimizingClient(cfg *clientConfig, verifiers []Client, watcher Client,
 		v.(*verifyingClient).indirectClient = c
 	}
 
-	oc.Start()
+	oc.Start(nil)
 	return c, nil
 }
 

@@ -14,7 +14,7 @@ func TestEmptyClient(t *testing.T) {
 	c := EmptyClientWithInfo(chainInfo)
 
 	// should be able to retrieve Info
-	i, err := c.Info(context.Background())
+	i, err := c.Info(context.Background(), chainInfo.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestEmptyClient(t *testing.T) {
 
 	// should be able to retrieve RoundAt
 	now := time.Now()
-	rnd := c.RoundAt(now)
+	rnd := c.RoundAt(now, chainInfo.Hash())
 	if rnd != chain.CurrentRound(now.Unix(), chainInfo.Period, chainInfo.GenesisTime) {
 		t.Fatal("unexpected RoundAt return value", rnd)
 	}
@@ -39,7 +39,7 @@ func TestEmptyClient(t *testing.T) {
 	}
 
 	// but Get does not work
-	_, err = c.Get(context.Background(), 0)
+	_, err = c.Get(context.Background(), chainInfo.Hash(), 0)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -51,7 +51,7 @@ func TestEmptyClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	ch := c.Watch(ctx)
+	ch := c.Watch(ctx, chainInfo.Hash())
 	rs := []Result{}
 	for r := range ch {
 		rs = append(rs, r)

@@ -25,19 +25,19 @@ func (m *emptyClient) String() string {
 	return emptyClientStringerValue
 }
 
-func (m *emptyClient) Info(ctx context.Context) (*chain.Info, error) {
+func (m *emptyClient) Info(ctx context.Context, chainHash []byte) (*chain.Info, error) {
 	return m.i, nil
 }
 
-func (m *emptyClient) RoundAt(t time.Time) uint64 {
+func (m *emptyClient) RoundAt(t time.Time, chainHash []byte) uint64 {
 	return chain.CurrentRound(t.Unix(), m.i.Period, m.i.GenesisTime)
 }
 
-func (m *emptyClient) Get(ctx context.Context, round uint64) (Result, error) {
+func (m *emptyClient) Get(ctx context.Context, chainHash []byte, round uint64) (Result, error) {
 	return nil, errEmptyClientUnsupportedGet
 }
 
-func (m *emptyClient) Watch(ctx context.Context) <-chan Result {
+func (m *emptyClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
 	ch := make(chan Result, 1)
 	close(ch)
 	return ch

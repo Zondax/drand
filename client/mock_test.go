@@ -35,7 +35,7 @@ func (m *MockClient) String() string {
 }
 
 // Get returns a the randomness at `round` or an error.
-func (m *MockClient) Get(ctx context.Context, round uint64) (Result, error) {
+func (m *MockClient) Get(ctx context.Context, chainHash []byte, round uint64) (Result, error) {
 	m.Lock()
 	if len(m.Results) == 0 {
 		m.Unlock()
@@ -67,7 +67,7 @@ func (m *MockClient) Get(ctx context.Context, round uint64) (Result, error) {
 }
 
 // Watch returns new randomness as it becomes available.
-func (m *MockClient) Watch(ctx context.Context) <-chan Result {
+func (m *MockClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
 	if m.WatchCh != nil {
 		return m.WatchCh
 	}
@@ -75,7 +75,7 @@ func (m *MockClient) Watch(ctx context.Context) <-chan Result {
 		return m.WatchF(ctx)
 	}
 	ch := make(chan Result, 1)
-	r, err := m.Get(ctx, 0)
+	r, err := m.Get(ctx, chainHash, 0)
 	if err == nil {
 		ch <- r
 	}
@@ -83,7 +83,7 @@ func (m *MockClient) Watch(ctx context.Context) <-chan Result {
 	return ch
 }
 
-func (m *MockClient) Info(ctx context.Context) (*chain.Info, error) {
+func (m *MockClient) Info(ctx context.Context, chainHash []byte) (*chain.Info, error) {
 	if m.OptionalInfo != nil {
 		return m.OptionalInfo, nil
 	}
@@ -91,7 +91,7 @@ func (m *MockClient) Info(ctx context.Context) (*chain.Info, error) {
 }
 
 // RoundAt will return the most recent round of randomness
-func (m *MockClient) RoundAt(_ time.Time) uint64 {
+func (m *MockClient) RoundAt(_ time.Time, _ []byte) uint64 {
 	return 0
 }
 
@@ -125,19 +125,19 @@ func (m *MockInfoClient) String() string {
 	return "MockInfo"
 }
 
-func (m *MockInfoClient) Info(ctx context.Context) (*chain.Info, error) {
+func (m *MockInfoClient) Info(ctx context.Context, chainHash []byte) (*chain.Info, error) {
 	return m.i, nil
 }
 
-func (m *MockInfoClient) RoundAt(t time.Time) uint64 {
+func (m *MockInfoClient) RoundAt(t time.Time, chainHash []byte) uint64 {
 	return chain.CurrentRound(t.Unix(), m.i.Period, m.i.GenesisTime)
 }
 
-func (m *MockInfoClient) Get(ctx context.Context, round uint64) (Result, error) {
+func (m *MockInfoClient) Get(ctx context.Context, chainHash []byte, round uint64) (Result, error) {
 	return nil, errors.New("not supported (mock info client get)")
 }
 
-func (m *MockInfoClient) Watch(ctx context.Context) <-chan Result {
+func (m *MockInfoClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
 	ch := make(chan Result, 1)
 	close(ch)
 	return ch

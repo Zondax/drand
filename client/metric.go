@@ -26,7 +26,7 @@ type watchLatencyMetricClient struct {
 }
 
 func (c *watchLatencyMetricClient) startObserve(ctx context.Context) {
-	rch := c.Watch(ctx)
+	rch := c.Watch(ctx, nil)
 	for {
 		select {
 		case result, ok := <-rch:

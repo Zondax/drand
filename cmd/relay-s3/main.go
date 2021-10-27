@@ -85,7 +85,7 @@ var runCmd = &cli.Command{
 
 func watch(ctx context.Context, c client.Watcher, upr *s3manager.Uploader, buc string) {
 	for {
-		ch := c.Watch(ctx)
+		ch := c.Watch(ctx, nil)
 	INNER:
 		for {
 			select {
@@ -172,9 +172,9 @@ var syncCmd = &cli.Command{
 		upr := s3manager.NewUploader(sess)
 		ctx := context.Background()
 
-		for rnd := cctx.Uint64("begin"); rnd <= c.RoundAt(time.Now()); rnd++ {
+		for rnd := cctx.Uint64("begin"); rnd <= c.RoundAt(time.Now(), nil); rnd++ {
 			// TODO: check if bucket already has this round
-			r, err := c.Get(ctx, rnd)
+			r, err := c.Get(ctx, nil, rnd)
 			if err != nil {
 				log.DefaultLogger().Errorw("", "relay_s3_sync", "failed to get randomness", "round", rnd, "err", err)
 				continue

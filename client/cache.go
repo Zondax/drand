@@ -90,19 +90,19 @@ func (c *cachingClient) String() string {
 }
 
 // Get returns the randomness at `round` or an error.
-func (c *cachingClient) Get(ctx context.Context, round uint64) (res Result, err error) {
+func (c *cachingClient) Get(ctx context.Context, chainHash []byte, round uint64) (res Result, err error) {
 	if val := c.cache.TryGet(round); val != nil {
 		return val, nil
 	}
-	val, err := c.Client.Get(ctx, round)
+	val, err := c.Client.Get(ctx, chainHash, round)
 	if err == nil && val != nil {
 		c.cache.Add(val.Round(), val)
 	}
 	return val, err
 }
 
-func (c *cachingClient) Watch(ctx context.Context) <-chan Result {
-	in := c.Client.Watch(ctx)
+func (c *cachingClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
+	in := c.Client.Watch(ctx, chainHash)
 	out := make(chan Result)
 	go func() {
 		for result := range in {
