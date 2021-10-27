@@ -20,6 +20,7 @@ import (
 type DrandDaemon struct {
 	initialStores   map[string]*key.Store
 	beaconProcesses map[string]*BeaconProcess
+	chainHashes     map[string]string
 
 	privGateway *net.PrivateGateway
 	pubGateway  *net.PublicGateway
@@ -121,4 +122,21 @@ func (dd *DrandDaemon) AddNewBeaconProcess(beaconID string, store key.Store) (*B
 	dd.state.Unlock()
 
 	return bp, nil
+}
+
+func (dd *DrandDaemon) AddNewChainHash(chainHash []byte, beaconID string) {
+	isDefault := false
+	if beaconID == "" {
+		beaconID = common.DefaultBeaconID
+		isDefault = true
+	}
+
+	dd.state.Lock()
+
+	dd.chainHashes[fmt.Sprintf("%x", chainHash)] = beaconID
+	if isDefault {
+		dd.chainHashes[beaconID] = beaconID
+	}
+
+	dd.state.Unlock()
 }
