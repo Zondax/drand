@@ -14,18 +14,18 @@ type Client interface {
 	// Get returns a the randomness at `round` or an error.
 	// Requesting round = 0 will return randomness for the most
 	// recent known round, bounded at a minimum to the `RoundAt(time.Now())`
-	Get(ctx context.Context, round uint64) (Result, error)
+	Get(ctx context.Context, chainHash []byte, round uint64) (Result, error)
 
 	// Watch returns new randomness as it becomes available.
-	Watch(ctx context.Context) <-chan Result
+	Watch(ctx context.Context, chainHash []byte) <-chan Result
 
 	// Info returns the parameters of the chain this client is connected to.
 	// The public key, when it started, and how frequently it updates.
-	Info(ctx context.Context) (*chain.Info, error)
+	Info(ctx context.Context, chainHash []byte) (*chain.Info, error)
 
 	// RoundAt will return the most recent round of randomness that will be available
 	// at time for the current client.
-	RoundAt(time time.Time) uint64
+	RoundAt(time time.Time, chainHash []byte) uint64
 
 	// Close will halt the client, any background processes it runs and any
 	// in-flight Get, Watch or Info requests. Behavior for usage of the client

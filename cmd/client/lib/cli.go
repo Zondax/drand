@@ -155,12 +155,23 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 
 func buildGrpcClient(c *cli.Context, info **chain.Info) ([]client.Client, error) {
 	if c.IsSet(GRPCConnectFlag.Name) {
+		hash := make([]byte, 0)
+
+		if c.IsSet(HashFlag.Name) {
+			var err error
+
+			hash, err = hex.DecodeString(c.String(HashFlag.Name))
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		gc, err := grpc.New(c.String(GRPCConnectFlag.Name), c.String(CertFlag.Name), c.Bool(InsecureFlag.Name))
 		if err != nil {
 			return nil, err
 		}
 		if *info == nil {
-			*info, err = gc.Info(context.Background())
+			*info, err = gc.Info(context.Background(), hash)
 			if err != nil {
 				return nil, err
 			}
@@ -189,7 +200,7 @@ func buildHTTPClients(c *cli.Context, info **chain.Info, hash []byte, withInstru
 				skipped = append(skipped, url)
 				continue
 			}
-			*info, err = hc.Info(context.Background())
+			*info, err = hc.Info(context.Background(), hash)
 			if err != nil {
 				log.DefaultLogger().Warnw("", "client", "failed to load Info from URL", "url", url, "err", err)
 				continue

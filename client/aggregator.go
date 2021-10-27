@@ -136,7 +136,7 @@ func (c *watchAggregator) passiveWatch(ctx context.Context) <-chan Result {
 	return wc
 }
 
-func (c *watchAggregator) Watch(ctx context.Context) <-chan Result {
+func (c *watchAggregator) Watch(ctx context.Context, chainHash []byte) <-chan Result {
 	c.subscriberLock.Lock()
 	defer c.subscriberLock.Unlock()
 
@@ -149,7 +149,7 @@ func (c *watchAggregator) Watch(ctx context.Context) <-chan Result {
 			c.cancelPassive = nil
 		}
 		ctx, cancel := context.WithCancel(context.Background())
-		go c.distribute(c.Client.Watch(ctx), cancel)
+		go c.distribute(c.Client.Watch(ctx, chainHash), cancel)
 	}
 	return sub.c
 }

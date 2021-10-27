@@ -13,8 +13,8 @@ type watcherClient struct {
 	watcher Watcher
 }
 
-func (c *watcherClient) Watch(ctx context.Context) <-chan Result {
-	return c.watcher.Watch(ctx)
+func (c *watcherClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
+	return c.watcher.Watch(ctx, chainHash)
 }
 
 func (c *watcherClient) Close() error {

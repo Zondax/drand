@@ -53,12 +53,12 @@ func (v *verifyingClient) SetLog(l log.Logger) {
 }
 
 // Get returns a requested round of randomness
-func (v *verifyingClient) Get(ctx context.Context, round uint64) (Result, error) {
-	info, err := v.indirectClient.Info(ctx)
+func (v *verifyingClient) Get(ctx context.Context, chainHash []byte, round uint64) (Result, error) {
+	info, err := v.indirectClient.Info(ctx, chainHash)
 	if err != nil {
 		return nil, err
 	}
-	r, err := v.Client.Get(ctx, round)
+	r, err := v.Client.Get(ctx, chainHash, round)
 	if err != nil {
 		return nil, err
 	}
@@ -70,17 +70,17 @@ func (v *verifyingClient) Get(ctx context.Context, round uint64) (Result, error)
 }
 
 // Watch returns new randomness as it becomes available.
-func (v *verifyingClient) Watch(ctx context.Context) <-chan Result {
+func (v *verifyingClient) Watch(ctx context.Context, chainHash []byte) <-chan Result {
 	outCh := make(chan Result, 1)
 
-	info, err := v.indirectClient.Info(ctx)
+	info, err := v.indirectClient.Info(ctx, chainHash)
 	if err != nil {
 		v.log.Errorw("", "verifying_client", "could not get info", "err", err)
 		close(outCh)
 		return outCh
 	}
 
-	inCh := v.Client.Watch(ctx)
+	inCh := v.Client.Watch(ctx, chainHash)
 	go func() {
 		defer close(outCh)
 		for r := range inCh {
@@ -115,8 +115,8 @@ func asRandomData(r Result) *RandomData {
 	return rd
 }
 
-func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round uint64) ([]byte, error) {
-	info, err := v.indirectClient.Info(ctx)
+func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, chainHash []byte, round uint64) ([]byte, error) {
+	info, err := v.indirectClient.Info(ctx, chainHash)
 	if err != nil {
 		v.log.Errorw("", "drand_client", "could not get info to verify round 1", "err", err)
 		return []byte{}, fmt.Errorf("could not get info: %w", err)
@@ -134,7 +134,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 	if v.pointOfTrust == nil || v.pointOfTrust.Round() > round {
 		// slow path
 		v.potLk.Unlock()
-		trustPrevSig, err = v.getTrustedPreviousSignature(ctx, 1)
+		trustPrevSig, err = v.getTrustedPreviousSignature(ctx, chainHash, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +149,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 	for trustRound < round-1 {
 		trustRound++
 		v.log.Warnw("", "verifying_client", "loading round to verify", "round", trustRound)
-		next, err = v.indirectClient.Get(ctx, trustRound)
+		next, err = v.indirectClient.Get(ctx, chainHash, trustRound)
 		if err != nil {
 			return []byte{}, fmt.Errorf("could not get round %d: %w", trustRound, err)
 		}
@@ -182,7 +182,7 @@ func (v *verifyingClient) getTrustedPreviousSignature(ctx context.Context, round
 func (v *verifyingClient) verify(ctx context.Context, info *chain.Info, r *RandomData) (err error) {
 	ps := r.PreviousSignature
 	if v.opts.strict || r.PreviousSignature == nil {
-		ps, err = v.getTrustedPreviousSignature(ctx, r.Round())
+		ps, err = v.getTrustedPreviousSignature(ctx, info.Hash(), r.Round())
 		if err != nil {
 			return
 		}

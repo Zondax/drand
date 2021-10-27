@@ -74,6 +74,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/flynn/noise v0.0.0-20180327030543-2492fe189ae6 // indirect
+	github.com/go-chi/chi v1.5.4 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -152,5 +153,6 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/text v0.3.5 // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

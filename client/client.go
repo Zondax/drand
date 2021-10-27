@@ -61,7 +61,7 @@ func makeClient(cfg *clientConfig) (Client, error) {
 	}
 
 	// try to populate chain info
-	if err := cfg.tryPopulateInfo(cfg.clients...); err != nil {
+	if err := cfg.tryPopulateInfo(cfg.chainHash, cfg.clients...); err != nil {
 		return nil, err
 	}
 
@@ -187,12 +187,12 @@ type clientConfig struct {
 	prometheus prometheus.Registerer
 }
 
-func (c *clientConfig) tryPopulateInfo(clients ...Client) (err error) {
+func (c *clientConfig) tryPopulateInfo(chainHash []byte, clients ...Client) (err error) {
 	if c.chainInfo == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), clientStartupTimeoutDefault)
 		defer cancel()
 		for _, cli := range clients {
-			c.chainInfo, err = cli.Info(ctx)
+			c.chainInfo, err = cli.Info(ctx, chainHash)
 			if err == nil {
 				return
 			}
@@ -295,7 +295,7 @@ func WithFullChainVerification() Option {
 
 // Watcher supplies the `Watch` portion of the drand client interface.
 type Watcher interface {
-	Watch(ctx context.Context) <-chan Result
+	Watch(ctx context.Context, chainHash []byte) <-chan Result
 }
 
 // WatcherCtor creates a Watcher once chain info is known.
