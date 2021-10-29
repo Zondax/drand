@@ -64,6 +64,11 @@ func New(ctx context.Context, c client.Client, version string, logger log.Logger
 	mux.HandleFunc("/info/{"+chainHashParamKey+"}", withCommonHeaders(version, handler.ChainInfo))
 	mux.HandleFunc("/health/{"+chainHashParamKey+"}", withCommonHeaders(version, handler.Health))
 
+	mux.HandleFunc("/public/latest", withCommonHeaders(version, handler.LatestRand))
+	mux.HandleFunc("/public", withCommonHeaders(version, handler.PublicRand))
+	mux.HandleFunc("/info", withCommonHeaders(version, handler.ChainInfo))
+	mux.HandleFunc("/health", withCommonHeaders(version, handler.Health))
+
 	instrumented := promhttp.InstrumentHandlerCounter(
 		metrics.HTTPCallCounter,
 		promhttp.InstrumentHandlerDuration(

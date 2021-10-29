@@ -242,7 +242,12 @@ func (h *httpClient) FetchChainInfo(ctx context.Context, chainHash []byte) (*cha
 	defer cancel()
 
 	go func() {
-		req, err := nhttp.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%sinfo/%x", h.root, chainHash), nil)
+		url := fmt.Sprintf("%sinfo", h.root)
+		if chainHash != nil && len(chainHash) > 0 {
+			url = fmt.Sprintf("%s/%x", url, chainHash)
+		}
+
+		req, err := nhttp.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			resC <- httpInfoResponse{nil, fmt.Errorf("creating request: %w", err)}
 			return
@@ -296,11 +301,16 @@ type httpGetResponse struct {
 
 // Get returns a the randomness at `round` or an error.
 func (h *httpClient) Get(ctx context.Context, chainHash []byte, round uint64) (client.Result, error) {
+	chainHashToUse := h.chainInfo.Hash()
+	if chainHash != nil {
+		chainHashToUse = chainHash
+	}
+
 	var url string
 	if round == 0 {
-		url = fmt.Sprintf("%spublic/latest/%x", h.root, chainHash)
+		url = fmt.Sprintf("%spublic/latest/%x", h.root, chainHashToUse)
 	} else {
-		url = fmt.Sprintf("%spublic/%d/%x", h.root, round, chainHash)
+		url = fmt.Sprintf("%spublic/%d/%x", h.root, round, chainHashToUse)
 	}
 
 	resC := make(chan httpGetResponse, 1)
