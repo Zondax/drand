@@ -126,7 +126,8 @@ func (bp *BeaconProcess) GetChainHash() ([]byte, error) {
 	bp.state.Unlock()
 
 	if bp.group != nil {
-		return group.Hash(), nil
+		chainInfo := chain.NewChainInfo(group)
+		return chainInfo.Hash(), nil
 	}
 
 	return nil, fmt.Errorf("group file is not loaded")

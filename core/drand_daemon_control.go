@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/drand/drand/chain"
+
 	"github.com/drand/drand/key"
 
 	"github.com/drand/drand/common/scheme"
@@ -36,7 +38,8 @@ func (dd *DrandDaemon) InitDKG(c context.Context, in *drand.InitDKGPacket) (*dra
 	resp, err := bp.InitDKG(c, in)
 	if err == nil && resp != nil {
 		if group, err := key.GroupFromProto(resp); err == nil {
-			dd.AddNewChainHash(group.Hash(), beaconID)
+			chainInfo := chain.NewChainInfo(group)
+			dd.AddNewChainHash(chainInfo.Hash(), beaconID)
 		}
 	}
 
