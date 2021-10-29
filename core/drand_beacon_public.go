@@ -58,6 +58,8 @@ func (d *BeaconProcess) PartialBeacon(c context.Context, in *drand.PartialBeacon
 // PublicRand returns a public random beacon according to the request. If the Round
 // field is 0, then it returns the last one generated.
 func (d *BeaconProcess) PublicRand(c context.Context, in *drand.PublicRandRequest) (*drand.PublicRandResponse, error) {
+	beaconID := in.GetMetadata().GetBeaconID()
+
 	var addr = net.RemoteAddress(c)
 
 	d.state.Lock()
@@ -75,10 +77,10 @@ func (d *BeaconProcess) PublicRand(c context.Context, in *drand.PublicRandReques
 		beaconResp, err = d.beacon.Store().Get(in.GetRound())
 	}
 	if err != nil || beaconResp == nil {
-		d.log.Debugw("", "public_rand", "unstored_beacon", "round", in.GetRound(), "from", addr)
+		d.log.Debugw("", "beacon_id", beaconID, "public_rand", "unstored_beacon", "round", in.GetRound(), "from", addr)
 		return nil, fmt.Errorf("can't retrieve beacon: %w %s", err, beaconResp)
 	}
-	d.log.Infow("", "public_rand", addr, "round", beaconResp.Round, "reply", beaconResp.String())
+	d.log.Infow("", "beacon_id", beaconID, "public_rand", addr, "round", beaconResp.Round, "reply", beaconResp.String())
 
 	response := beaconToProto(beaconResp)
 	response.Metadata = common.NewMetadata(d.version.ToProto())

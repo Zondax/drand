@@ -30,12 +30,16 @@ func (dd *DrandDaemon) PartialBeacon(c context.Context, in *drand.PartialBeaconP
 // PublicRand returns a public random beacon according to the request. If the Round
 // field is 0, then it returns the last one generated.
 func (dd *DrandDaemon) PublicRand(c context.Context, in *drand.PublicRandRequest) (*drand.PublicRandResponse, error) {
-	bp, _, err := dd.getBeaconProcessByChainHash(in.GetMetadata())
+	metadata := in.GetMetadata()
+	beaconID, err := dd.translateChainHashToBeaconId(metadata)
 	if err != nil {
-		bp, _, err = dd.getBeaconProcessByID(in.GetMetadata())
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
+	}
+
+	metadata.BeaconID = beaconID
+	bp, _, err := dd.getBeaconProcessByID(in.GetMetadata())
+	if err != nil {
+		return nil, err
 	}
 
 	return bp.PublicRand(c, in)
@@ -43,12 +47,16 @@ func (dd *DrandDaemon) PublicRand(c context.Context, in *drand.PublicRandRequest
 
 // PublicRandStream exports a stream of new beacons as they are generated over gRPC
 func (dd *DrandDaemon) PublicRandStream(in *drand.PublicRandRequest, stream drand.Public_PublicRandStreamServer) error {
-	bp, _, err := dd.getBeaconProcessByChainHash(in.GetMetadata())
+	metadata := in.GetMetadata()
+	beaconID, err := dd.translateChainHashToBeaconId(metadata)
 	if err != nil {
-		bp, _, err = dd.getBeaconProcessByID(in.GetMetadata())
-		if err != nil {
-			return err
-		}
+		return err
+	}
+
+	metadata.BeaconID = beaconID
+	bp, _, err := dd.getBeaconProcessByID(in.GetMetadata())
+	if err != nil {
+		return err
 	}
 
 	return bp.PublicRandStream(in, stream)
@@ -76,12 +84,16 @@ func (dd *DrandDaemon) Home(c context.Context, in *drand.HomeRequest) (*drand.Ho
 
 // ChainInfo replies with the chain information this node participates to
 func (dd *DrandDaemon) ChainInfo(ctx context.Context, in *drand.ChainInfoRequest) (*drand.ChainInfoPacket, error) {
-	bp, _, err := dd.getBeaconProcessByChainHash(in.GetMetadata())
+	metadata := in.GetMetadata()
+	beaconID, err := dd.translateChainHashToBeaconId(metadata)
 	if err != nil {
-		bp, _, err = dd.getBeaconProcessByID(in.GetMetadata())
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
+	}
+
+	metadata.BeaconID = beaconID
+	bp, _, err := dd.getBeaconProcessByID(in.GetMetadata())
+	if err != nil {
+		return nil, err
 	}
 
 	return bp.ChainInfo(ctx, in)
@@ -110,12 +122,16 @@ func (dd *DrandDaemon) PushDKGInfo(ctx context.Context, in *drand.DKGInfoPacket)
 // SyncChain is a inter-node protocol that replies to a syncing request from a
 // given round
 func (dd *DrandDaemon) SyncChain(in *drand.SyncRequest, stream drand.Protocol_SyncChainServer) error {
-	bp, _, err := dd.getBeaconProcessByChainHash(in.GetMetadata())
+	metadata := in.GetMetadata()
+	beaconID, err := dd.translateChainHashToBeaconId(metadata)
 	if err != nil {
-		bp, _, err = dd.getBeaconProcessByID(in.GetMetadata())
-		if err != nil {
-			return err
-		}
+		return err
+	}
+
+	metadata.BeaconID = beaconID
+	bp, _, err := dd.getBeaconProcessByID(in.GetMetadata())
+	if err != nil {
+		return err
 	}
 
 	return bp.SyncChain(in, stream)

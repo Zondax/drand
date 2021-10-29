@@ -51,6 +51,13 @@ func startCmd(c *cli.Context) error {
 				return err
 			}
 
+			chainHash, err := bp.GetChainHash()
+			if err != nil {
+				return err
+			}
+
+			drandDaemon.AddNewChainHash(chainHash, beaconID)
+
 			// XXX make it configurable so that new share holder can still start if
 			// nobody started.
 			// drand.StartBeacon(!c.Bool(pushFlag.Name))

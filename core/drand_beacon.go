@@ -120,6 +120,18 @@ func (bp *BeaconProcess) Load() (*BeaconProcess, error) {
 
 }
 
+func (bp *BeaconProcess) GetChainHash() ([]byte, error) {
+	bp.state.Lock()
+	group := bp.group
+	bp.state.Unlock()
+
+	if bp.group != nil {
+		return group.Hash(), nil
+	}
+
+	return nil, fmt.Errorf("group file is not loaded")
+}
+
 // WaitDKG waits on the running dkg protocol. In case of an error, it returns
 // it. In case of a finished DKG protocol, it saves the dist. public  key and
 // private share. These should be loadable by the store.

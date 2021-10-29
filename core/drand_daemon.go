@@ -50,6 +50,7 @@ func NewDrandDaemon(c *Config) (*DrandDaemon, error) {
 		version:         common.GetAppVersion(),
 		initialStores:   make(map[string]*key.Store),
 		beaconProcesses: make(map[string]*BeaconProcess),
+		chainHashes:     make(map[string]string),
 	}
 
 	if err := drandDaemon.init(); err != nil {
@@ -126,7 +127,7 @@ func (dd *DrandDaemon) AddNewBeaconProcess(beaconID string, store key.Store) (*B
 
 func (dd *DrandDaemon) AddNewChainHash(chainHash []byte, beaconID string) {
 	isDefault := false
-	if beaconID == "" {
+	if beaconID == "" || beaconID == "default" {
 		beaconID = common.DefaultBeaconID
 		isDefault = true
 	}

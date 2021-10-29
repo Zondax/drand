@@ -24,7 +24,7 @@ func (dd *DrandDaemon) getBeaconProcessByID(metadata *protoCommon.Metadata) (*Be
 	return bp, beaconID, nil
 }
 
-func (dd *DrandDaemon) getBeaconProcessByChainHash(metadata *protoCommon.Metadata) (*BeaconProcess, string, error) {
+func (dd *DrandDaemon) translateChainHashToBeaconId(metadata *protoCommon.Metadata) (string, error) {
 	chainHash := ""
 	chainHashSlice := metadata.GetChainHash()
 	if chainHashSlice == nil || len(chainHashSlice) == 0 {
@@ -33,20 +33,14 @@ func (dd *DrandDaemon) getBeaconProcessByChainHash(metadata *protoCommon.Metadat
 		chainHash = fmt.Sprintf("%x", chainHashSlice)
 	}
 
-	var bp *BeaconProcess
-	isBpCreated := false
-
 	dd.state.Lock()
 	beaconID, isChainHashPresent := dd.chainHashes[chainHash]
-	if isChainHashPresent {
-		bp, isBpCreated = dd.beaconProcesses[beaconID]
-	}
 	dd.state.Unlock()
 
-	if !isBpCreated {
-		return nil, beaconID, fmt.Errorf("beacon id [%s] is not running", beaconID)
+	if !isChainHashPresent {
+		return "", fmt.Errorf("beacon with chain hash [%s] is not running", chainHash)
 	}
 
-	return bp, beaconID, nil
+	return beaconID, nil
 
 }
