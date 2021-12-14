@@ -397,7 +397,7 @@ var appCommands = []*cli.Command{
 				Usage: "Ask for the statuses of remote nodes indicated by " +
 					"`ADDRESS1 ADDRESS2 ADDRESS3...`, including the network " +
 					"visibility over the rest of the addresses given.",
-				Flags:  toArray(controlFlag, jsonFlag),
+				Flags:  toArray(controlFlag, jsonFlag, beaconIDFlag),
 				Action: remoteStatusCmd,
 			},
 			{
@@ -415,7 +415,7 @@ var appCommands = []*cli.Command{
 			{
 				Name:   "status",
 				Usage:  "Get the status of many modules of running the daemon\n",
-				Flags:  toArray(controlFlag, jsonFlag),
+				Flags:  toArray(controlFlag, jsonFlag, beaconIDFlag),
 				Action: statusCmd,
 			},
 			{
@@ -449,7 +449,7 @@ var appCommands = []*cli.Command{
 			{
 				Name:   "backup",
 				Usage:  "backs up the primary drand database to a secondary location.",
-				Flags:  toArray(outFlag, controlFlag),
+				Flags:  toArray(outFlag, controlFlag, beaconIDFlag),
 				Action: backupDBCmd,
 			},
 		},
@@ -467,7 +467,7 @@ var appCommands = []*cli.Command{
 			{
 				Name:   "share",
 				Usage:  "shows the private share\n",
-				Flags:  toArray(controlFlag),
+				Flags:  toArray(controlFlag, beaconIDFlag),
 				Action: showShareCmd,
 			},
 			{
@@ -475,25 +475,25 @@ var appCommands = []*cli.Command{
 				Usage: "shows the current group.toml used. The group.toml " +
 					"may contain the distributed public key if the DKG has been " +
 					"ran already.\n",
-				Flags:  toArray(outFlag, controlFlag, hashOnly),
+				Flags:  toArray(outFlag, controlFlag, hashOnly, beaconIDFlag),
 				Action: showGroupCmd,
 			},
 			{
 				Name:   "chain-info",
 				Usage:  "shows the chain information this node is participating to",
-				Flags:  toArray(controlFlag, hashOnly),
+				Flags:  toArray(controlFlag, hashOnly, beaconIDFlag),
 				Action: showChainInfo,
 			},
 			{
 				Name:   "private",
 				Usage:  "shows the long-term private key of a node.\n",
-				Flags:  toArray(controlFlag),
+				Flags:  toArray(controlFlag, beaconIDFlag),
 				Action: showPrivateCmd,
 			},
 			{
 				Name:   "public",
 				Usage:  "shows the long-term public key of a node.\n",
-				Flags:  toArray(controlFlag),
+				Flags:  toArray(controlFlag, beaconIDFlag),
 				Action: showPublicCmd,
 			},
 		},

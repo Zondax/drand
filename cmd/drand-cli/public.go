@@ -55,6 +55,7 @@ func getPublicRandomness(c *cli.Context) error {
 	if !c.Args().Present() {
 		return errors.New("get public command takes a group file as argument")
 	}
+
 	certPath := ""
 	if c.IsSet(tlsCertFlag.Name) {
 		certPath = c.String(tlsCertFlag.Name)
@@ -64,6 +65,7 @@ func getPublicRandomness(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	group, err := getGroup(c)
 	if err != nil {
 		return err
