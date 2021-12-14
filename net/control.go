@@ -268,9 +268,9 @@ func (c *ControlClient) GroupFile(beaconID string) (*control.GroupPacket, error)
 }
 
 // Shutdown stops the daemon
-func (c *ControlClient) Shutdown() (*control.ShutdownResponse, error) {
-	metadata := protoCommon.NewMetadata(c.version.ToProto())
-	return c.client.Shutdown(ctx.Background(), &control.ShutdownRequest{Metadata: metadata})
+func (c *ControlClient) Shutdown(beaconID string) (*control.ShutdownResponse, error) {
+	metadata := protoCommon.Metadata{NodeVersion: c.version.ToProto(), BeaconID: beaconID}
+	return c.client.Shutdown(ctx.Background(), &control.ShutdownRequest{Metadata: &metadata})
 }
 
 const progressFollowQueue = 100

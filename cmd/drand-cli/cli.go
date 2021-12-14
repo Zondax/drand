@@ -300,7 +300,7 @@ var appCommands = []*cli.Command{
 	{
 		Name:  "stop",
 		Usage: "Stop the drand daemon.\n",
-		Flags: toArray(controlFlag),
+		Flags: toArray(controlFlag, beaconIDFlag),
 		Action: func(c *cli.Context) error {
 			banner()
 			return stopDaemon(c)

@@ -130,6 +130,13 @@ func (h *handler) CreateBeaconHandler(c client.Client, chainHash string) *beacon
 	return bh
 }
 
+func (h *handler) RemoveBeaconHandler(chainHash string) {
+	h.state.Lock()
+	defer h.state.Unlock()
+
+	delete(h.beacons, chainHash)
+}
+
 func (h *handler) AddDefaultBeaconHandler(bh *beaconHandler) {
 	h.state.Lock()
 	defer h.state.Unlock()
