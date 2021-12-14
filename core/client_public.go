@@ -31,7 +31,10 @@ func NewGrpcClient(chainHash []byte, opts ...grpc.DialOption) *Client {
 
 // NewGrpcClientFromCert returns a client that contact its peer over TLS
 func NewGrpcClientFromCert(chainHash []byte, c *net.CertManager, opts ...grpc.DialOption) *Client {
-	return &Client{client: net.NewGrpcClientFromCertManager(c, opts...)}
+	return &Client{
+		client:    net.NewGrpcClientFromCertManager(c, opts...),
+		chainHash: chainHash,
+	}
 }
 
 // ChainInfo returns the chain info as reported by the given peer.
