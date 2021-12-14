@@ -584,7 +584,7 @@ func followCmd(c *cli.Context) error {
 	addrs := strings.Split(c.String(syncNodeFlag.Name), ",")
 	channel, errCh, err := ctrlClient.StartFollowChain(
 		c.Context,
-		c.String(hashInfoFlag.Name),
+		c.String(hashInfoReq.Name),
 		addrs,
 		!c.Bool(insecureFlag.Name),
 		uint64(c.Int(upToFlag.Name)),

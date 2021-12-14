@@ -235,10 +235,15 @@ var hashOnly = &cli.BoolFlag{
 	Usage: "Only print the hash of the group file",
 }
 
-var hashInfoFlag = &cli.StringFlag{
+var hashInfoReq = &cli.StringFlag{
 	Name:     "chain-hash",
 	Usage:    "The hash of the chain info",
 	Required: true,
+}
+
+var hashInfoNoReq = &cli.StringFlag{
+	Name:  "chain-hash",
+	Usage: "The hash of the chain info",
 }
 
 // using a simple string flag because the StringSliceFlag is not intuitive
@@ -317,7 +322,7 @@ var appCommands = []*cli.Command{
 	{
 		Name:  "follow",
 		Usage: "follow and store a randomness chain",
-		Flags: toArray(folderFlag, controlFlag, hashInfoFlag, syncNodeFlag,
+		Flags: toArray(folderFlag, controlFlag, hashInfoReq, syncNodeFlag,
 			tlsCertFlag, insecureFlag, upToFlag, beaconIDFlag),
 		Action: followCmd,
 	},
@@ -369,7 +374,7 @@ var appCommands = []*cli.Command{
 				Name:      "chain-info",
 				Usage:     "Get the binding chain information that this nodes participates to",
 				ArgsUsage: "`ADDRESS1` `ADDRESS2` ... provides the addresses of the node to try to contact to.",
-				Flags:     toArray(tlsCertFlag, insecureFlag, hashOnly),
+				Flags:     toArray(tlsCertFlag, insecureFlag, hashOnly, hashInfoNoReq),
 				Action:    getChainInfo,
 			},
 		},
