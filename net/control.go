@@ -307,7 +307,7 @@ func (c *ControlClient) StartFollowChain(cc ctx.Context,
 	return outCh, errCh, nil
 }
 
-// BackupDB backs up the database to afile
+// BackupDB backs up the database to a file
 func (c *ControlClient) BackupDB(outFile string) error {
 	metadata := protoCommon.NewMetadata(c.version.ToProto())
 	_, err := c.client.BackupDatabase(ctx.Background(), &control.BackupDBRequest{OutputFile: outFile, Metadata: metadata})
