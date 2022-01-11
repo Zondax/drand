@@ -337,6 +337,7 @@ func (bp *BeaconProcess) runDKG(leader bool, group *key.Group, timeout uint32, r
 		Threshold:      group.Threshold,
 		Nonce:          getNonce(group),
 		Auth:           key.DKGAuthScheme,
+		Log:            bp.log,
 	}
 	phaser := bp.getPhaser(timeout, beaconID)
 	board := newEchoBroadcast(bp.log, bp.version, beaconID, bp.privGateway.ProtocolClient,
@@ -424,6 +425,7 @@ func (bp *BeaconProcess) runResharing(leader bool, oldGroup, newGroup *key.Group
 		FastSync:     true,
 		Nonce:        getNonce(newGroup),
 		Auth:         key.DKGAuthScheme,
+		Log:          bp.log,
 	}
 	err := func() error {
 		bp.state.Lock()
@@ -1077,8 +1079,12 @@ func (bp *BeaconProcess) StartFollowChain(req *drand.StartFollowRequest, stream 
 		store.Close()
 		return fmt.Errorf("unable to insert genesis block: %s", err)
 	}
+
+	// add scheme store to handle scheme configuration on beacon storing process correctly
+	ss := beacon.NewSchemeStore(store, info.Scheme)
+
 	// register callback to notify client of progress
-	cbStore := beacon.NewCallbackStore(store)
+	cbStore := beacon.NewCallbackStore(ss)
 	defer cbStore.Close()
 
 	syncer := beacon.NewSyncer(bp.log, cbStore, info, bp.privGateway)
