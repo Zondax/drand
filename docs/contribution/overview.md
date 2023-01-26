@@ -1,8 +1,12 @@
+---
+title: "Overview"
+sidebar_position: 1
+---
 
 ## Multi Chain Support 
 Generating public randomness is the primary functionality of drand. Public randomness is generated collectively by 
 drand nodes and is made publicly available. In the past, each node could only run one process which will generate random values. 
-We contributed to the project by adding support to run more than one of these processes at the same time. Therefore, now each node can run 
+**We contributed to the project by adding support to run more than one of these processes at the same time**. Therefore, now each node can run 
 multiple processes (i.e., participate in multiple networks) at the same time, each of which is independent of each other, 
 with its own set of parameters. All processes use the same node address to send messages to and the node will 
 identify and dispatch the request to the correct process/network (running internally) using an ID, known as the Beacon ID.
@@ -26,7 +30,7 @@ the request and redirecting the message accordingly.
 ![Message routing](../assets/multichain_3.png)
 
 ## Unchained randomness
-Thanks to our contribution, drand network can now work in two different modes: chained or unchained. In the past it only worked on chained mode. 
+**Thanks to our contribution, drand network can now work in two different modes: chained or unchained.** In the past it only worked on chained mode. 
 
 The drand randomness beacon operates in discrete rounds . In every round, drand produces a new random value using
 threshold BLS signatures which can be linked together, or not, into a chain of randomness.
@@ -43,8 +47,8 @@ In unchained mode, in order to extend the chain of randomness, each drand partic
 ## Node versioning
 In the past, messages between nodes were not versioned. There was no way to identify the node version of each working node in the network, or 
 handle possible breaking changes correctly. As messages didn't indicate node version, incoming requests to a node could not analyze and decide if
-they could or could not be processed. In our contribution, we added these nice feature. Now each request sent by a drand node will contain the 
-actual drand protocol version that the node is using. Drand uses semantic versioning (opens new window) as a versioning protocol. 
+they could or could not be processed. **In our contribution, we added this nice feature. Now each request sent by a drand node will contain the 
+actual drand protocol version that the node is using**. Drand uses semantic versioning (opens new window) as a versioning protocol. 
 This has a clear purpose. Only nodes with same MAJOR version will be allowed to communicate with each other.
 For backward-compatibility reasons, the fallback value will be 0.0.0, and nodes with this version will always be allowed 
 to communicate with other nodes. The protobuf definition for this field is:

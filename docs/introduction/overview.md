@@ -1,5 +1,8 @@
+---
+title: "Overview"
+sidebar_position: 2
+---
 
-## Overview
 The need for digital randomness is paramount in multiple digital applications
 ([e]voting, lottery, cryptographic parameters, embedded devices bootstrapping
 randomness, blockchain systems etc) as well in non-digital such as statistical

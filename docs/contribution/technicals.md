@@ -1,10 +1,14 @@
+---
+title: "Technicals"
+sidebar_position: 2
+---
 
 ## New features
 - Unchained randomness
 - Multi beacon support
 - Node versioning
 
-## Changes
+## Improvements
 ### Dev Tools
 - Migrate CI to GitHub Actions
 - Update linter configurations

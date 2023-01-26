@@ -1,5 +1,8 @@
+---
+title: "Goals"
+sidebar_position: 3
+---
 
-## Goals
 
 ### Public Randomness
 Generating public randomness is the primary functionality of drand. Public
