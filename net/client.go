@@ -4,8 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/drand/drand/protobuf/drand"
 	"google.golang.org/grpc"
+
+	"github.com/drand/drand/protobuf/drand"
 )
 
 // Client implements methods to call on the protocol API and the public API of a
@@ -16,7 +17,7 @@ type Client interface {
 	HTTPClient
 }
 
-// Stopppable is an interface that some clients can implement to close their
+// Stoppable is an interface that some clients can implement to close their
 // operations
 type Stoppable interface {
 	Stop()
@@ -42,7 +43,6 @@ type ProtocolClient interface {
 type PublicClient interface {
 	PublicRandStream(ctx context.Context, p Peer, in *drand.PublicRandRequest, opts ...CallOption) (chan *drand.PublicRandResponse, error)
 	PublicRand(ctx context.Context, p Peer, in *drand.PublicRandRequest) (*drand.PublicRandResponse, error)
-	PrivateRand(ctx context.Context, p Peer, in *drand.PrivateRandRequest) (*drand.PrivateRandResponse, error)
 	ChainInfo(ctx context.Context, p Peer, in *drand.ChainInfoRequest) (*drand.ChainInfoPacket, error)
 	Home(ctx context.Context, p Peer, in *drand.HomeRequest) (*drand.HomeResponse, error)
 }

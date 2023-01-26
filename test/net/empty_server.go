@@ -26,11 +26,6 @@ func (s *EmptyServer) PublicRand(context.Context, *drand.PublicRandRequest) (*dr
 	return nil, nil
 }
 
-// PrivateRand is an empty implementation
-func (s *EmptyServer) PrivateRand(context.Context, *drand.PrivateRandRequest) (*drand.PrivateRandResponse, error) {
-	return nil, nil
-}
-
 // ChainInfo is an empty implementation
 func (s *EmptyServer) ChainInfo(context.Context, *drand.ChainInfoRequest) (*drand.ChainInfoPacket, error) {
 	return nil, nil
@@ -61,9 +56,13 @@ func (s *EmptyServer) SyncChain(*drand.SyncRequest, drand.Protocol_SyncChainServ
 	return nil
 }
 
-// StartFollowChain is the control method to instruct a drand daemon to follow
-// its chain
-func (s *EmptyServer) StartFollowChain(*drand.StartFollowRequest, drand.Control_StartFollowChainServer) error {
+// StartFollowChain is the control method to instruct a drand daemon to sync its chain
+func (s *EmptyServer) StartFollowChain(*drand.StartSyncRequest, drand.Control_StartFollowChainServer) error {
+	return nil
+}
+
+// StartCheckChain is the control method to instruct a drand daemon to check its chain
+func (s *EmptyServer) StartCheckChain(*drand.StartSyncRequest, drand.Control_StartCheckChainServer) error {
 	return nil
 }
 
@@ -84,6 +83,11 @@ func (s *EmptyServer) PingPong(context.Context, *drand.Ping) (*drand.Pong, error
 
 // ListSchemes is an empty implementation
 func (s *EmptyServer) ListSchemes(context.Context, *drand.ListSchemesRequest) (*drand.ListSchemesResponse, error) {
+	return nil, nil
+}
+
+// ListBeaconIDs is an empty implementation
+func (s *EmptyServer) ListBeaconIDs(context.Context, *drand.ListBeaconIDsRequest) (*drand.ListBeaconIDsResponse, error) {
 	return nil, nil
 }
 
@@ -128,7 +132,7 @@ func (s *EmptyServer) Shutdown(context.Context, *drand.ShutdownRequest) (*drand.
 }
 
 // ReloadBeacon is an empty implementation
-func (s *EmptyServer) ReloadBeacon(context.Context, *drand.ReloadBeaconRequest) (*drand.ReloadBeaconResponse, error) {
+func (s *EmptyServer) LoadBeacon(context.Context, *drand.LoadBeaconRequest) (*drand.LoadBeaconResponse, error) {
 	return nil, nil
 }
 

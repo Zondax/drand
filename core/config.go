@@ -1,18 +1,22 @@
 package core
 
 import (
+	"context"
+	"fmt"
 	"path"
 	"time"
 
-	"github.com/drand/drand/common"
-
-	"github.com/drand/drand/chain"
-	"github.com/drand/drand/key"
-	"github.com/drand/drand/log"
-	"github.com/drand/drand/net"
+	"github.com/jmoiron/sqlx"
 	clock "github.com/jonboulle/clockwork"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
+
+	"github.com/drand/drand/chain"
+	"github.com/drand/drand/chain/postgresdb/database"
+	"github.com/drand/drand/common"
+	"github.com/drand/drand/key"
+	"github.com/drand/drand/log"
+	"github.com/drand/drand/net"
 )
 
 // ConfigOption is a function that applies a specific setting to a Config.
@@ -25,19 +29,22 @@ type Config struct {
 	privateListenAddr string
 	publicListenAddr  string
 	controlPort       string
+	dbStorageEngine   chain.StorageType
+	insecure          bool
+	dkgTimeout        time.Duration
 	grpcOpts          []grpc.DialOption
 	callOpts          []grpc.CallOption
-	dkgTimeout        time.Duration
 	boltOpts          *bolt.Options
+	pgDSN             string
+	pgConn            *sqlx.DB
+	memDBSize         int
 	beaconCbs         []func(*chain.Beacon)
 	dkgCallback       func(*key.Share, *key.Group)
-	insecure          bool
 	certPath          string
 	keyPath           string
 	certmanager       *net.CertManager
 	logger            log.Logger
 	clock             clock.Clock
-	enablePrivate     bool
 }
 
 // NewConfig returns the config to pass to drand with the default options set
@@ -46,10 +53,9 @@ func NewConfig(opts ...ConfigOption) *Config {
 	d := &Config{
 		configFolder: DefaultConfigFolder(),
 		dkgTimeout:   DefaultDKGTimeout,
-		//certmanager: net.NewCertManager(),
-		controlPort: DefaultControlPort,
-		logger:      log.DefaultLogger(),
-		clock:       clock.NewRealClock(),
+		controlPort:  DefaultControlPort,
+		logger:       log.DefaultLogger(),
+		clock:        clock.NewRealClock(),
 	}
 	for i := range opts {
 		opts[i](d)
@@ -72,11 +78,7 @@ func (d *Config) ConfigFolderMB() string {
 // DBFolder returns the folder under which drand stores db file specifically.
 // If beacon id is empty, it will use the default value
 func (d *Config) DBFolder(beaconID string) string {
-	if beaconID == "" {
-		beaconID = common.DefaultBeaconID
-	}
-
-	return path.Join(d.ConfigFolderMB(), beaconID, DefaultDBFolder)
+	return path.Join(d.ConfigFolderMB(), common.GetCanonicalBeaconID(beaconID), DefaultDBFolder)
 }
 
 // Certs returns all custom certs currently being trusted by drand.
@@ -162,6 +164,57 @@ func WithBoltOptions(opts *bolt.Options) ConfigOption {
 // BoltOptions returns the options given to the bolt db
 func (d *Config) BoltOptions() *bolt.Options {
 	return d.boltOpts
+}
+
+// WithDBStorageEngine allows setting the specific storage type
+func WithDBStorageEngine(engine chain.StorageType) ConfigOption {
+	return func(d *Config) {
+		d.dbStorageEngine = engine
+	}
+}
+
+// WithPgDSN applies PosgresSQL specific options to the PG store.
+// It will also create a new database connection.
+func WithPgDSN(dsn string) ConfigOption {
+	return func(d *Config) {
+		d.pgDSN = dsn
+
+		if d.dbStorageEngine != chain.PostgreSQL {
+			// TODO (dlsniper): Would be nice to have a log here. It needs to be injected somehow.
+			return
+		}
+
+		pgConf, err := database.ConfigFromDSN(dsn)
+		if err != nil {
+			panic(err)
+		}
+
+		//nolint:gomnd // We want a reasonable timeout to connect to the database. If it's not done in 5 seconds, then there are bigger problems.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		d.pgConn, err = database.Open(ctx, pgConf)
+		if err != nil {
+			err := fmt.Errorf("error while attempting to connect to the database: dsn: %s %w", dsn, err)
+			panic(err)
+		}
+	}
+}
+
+// PgDSN returns the PostgreSQL specific DSN configuration.
+func (d *Config) PgDSN() string {
+	return d.pgDSN
+}
+
+func WithMemDBSize(bufferSize int) ConfigOption {
+	return func(d *Config) {
+		//nolint:gomnd // We want to have a guard here. And it's number 10. It's higher than 1 or 2 to allow for chained mode
+		if bufferSize < 10 {
+			err := fmt.Errorf("in-memory buffer size cannot be smaller than 10, currently %d, recommended at least 2000", bufferSize)
+			panic(err)
+		}
+		d.memDBSize = bufferSize
+	}
 }
 
 // WithConfigFolder sets the base configuration folder to the given string.
@@ -256,14 +309,6 @@ func WithLogLevel(level int, jsonFormat bool) ConfigOption {
 		} else {
 			d.logger = log.NewLogger(nil, level)
 		}
-	}
-}
-
-// WithPrivateRandomness enables the private randomness feature on the drand
-// logic. When the feature is not enabled, the call returns an error.
-func WithPrivateRandomness() ConfigOption {
-	return func(d *Config) {
-		d.enablePrivate = true
 	}
 }
 

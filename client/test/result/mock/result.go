@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/common/scheme"
-
 	"github.com/drand/drand/chain"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/kyber/share"
 	"github.com/drand/kyber/sign/tbls"
@@ -122,7 +121,7 @@ func VerifiableResults(count int, sch scheme.Scheme) (*chain.Info, []Result) {
 		PublicKey:   public,
 		Period:      time.Second,
 		GenesisTime: time.Now().Unix() - int64(count),
-		GroupHash:   out[0].PSig,
+		GenesisSeed: out[0].PSig,
 		Scheme:      sch,
 	}
 

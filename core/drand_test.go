@@ -2,32 +2,88 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/drand/drand/common"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/weaveworks/common/fs"
 
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/net"
+	"github.com/drand/drand/protobuf/common"
 	"github.com/drand/drand/protobuf/drand"
-	"github.com/stretchr/testify/require"
+	"github.com/drand/drand/test"
 )
 
-func setFDLimit() {
-	fdOpen := 2000
-	_, max, err := unixGetLimit()
+func setFDLimit(t *testing.T) {
+	fdOpen := uint64(3000)
+	curr, max, err := unixGetLimit()
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-	if err := unixSetLimit(uint64(fdOpen), max); err != nil {
-		panic(err)
+	if fdOpen <= curr {
+		t.Logf("Current limit is larger (%d) than ours (%d); not changing it.\n", curr, fdOpen)
+		return
+	} else if err := unixSetLimit(fdOpen, max); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func consumeProgress(t *testing.T, progress chan *drand.SyncProgress, errCh chan error, amount uint64, progressing bool) {
+	t.Logf("in consumeProgress(t, progress, errCh, %d, %t)\n", amount, progressing)
+
+	if progressing {
+		defer func() {
+			for e := range errCh {
+				if errors.Is(e, io.EOF) { // means we've reached the end
+					t.Logf("\t\t --> Got EOF from daemon.")
+					return
+				}
+				t.Logf("\t\t --> Unexpected error received: %v.", e)
+				require.NoError(t, e)
+			}
+		}()
+
+		for {
+			select {
+			case p, ok := <-progress:
+				if ok && p.Current == amount {
+					t.Logf("\t\t --> Successful chain sync progress. Achieved round: %d.", amount)
+					return
+				}
+				if !ok {
+					return
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatalf("\t\t --> Timeout during test")
+				return
+			}
+		}
+	} else { // we test the special case when we get Current == 0 and Target reports the amount of invalid beacon
+		select {
+		case p, ok := <-progress:
+			require.True(t, ok)
+			require.Equal(t, uint64(0), p.Current)
+			require.Equal(t, amount, p.Target)
+		case e := <-errCh:
+			if errors.Is(e, io.EOF) {
+				t.Logf("\t\t --> Got EOF from daemon.")
+				return
+			}
+			t.Logf("\t\t -->Unexpected error received: %v.", e)
+			require.NoError(t, e)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("\t\t --> Timeout during test")
+			return
+		}
 	}
 }
 
@@ -39,20 +95,19 @@ var testDkgTimeout = 2 * time.Second
 func TestRunDKG(t *testing.T) {
 	n := 4
 	expectedBeaconPeriod := 5 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), expectedBeaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
 	t.Log(group)
 
-	assert.Equal(t, 3, group.Threshold)
-	assert.Equal(t, expectedBeaconPeriod, group.Period)
-	assert.Equal(t, time.Duration(0), group.CatchupPeriod)
-	assert.Equal(t, n, len(group.Nodes))
-	assert.Equal(t, int64(449884810), group.GenesisTime)
+	require.Equal(t, 3, group.Threshold)
+	require.Equal(t, expectedBeaconPeriod, group.Period)
+	require.Equal(t, time.Duration(0), group.CatchupPeriod)
+	require.Equal(t, n, len(group.Nodes))
+	require.Equal(t, int64(449884810), group.GenesisTime)
 }
 
 // Test dkg for a large quantity of nodes (22 nodes)
@@ -61,22 +116,21 @@ func TestRunDKGLarge(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	setFDLimit()
+	setFDLimit(t)
 
 	n := 22
 	expectedBeaconPeriod := 5 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), expectedBeaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
-	assert.Equal(t, 12, group.Threshold)
-	assert.Equal(t, expectedBeaconPeriod, group.Period)
-	assert.Equal(t, time.Duration(0), group.CatchupPeriod)
-	assert.Equal(t, n, len(group.Nodes))
-	assert.Equal(t, int64(449884810), group.GenesisTime)
+	require.Equal(t, 12, group.Threshold)
+	require.Equal(t, expectedBeaconPeriod, group.Period)
+	require.Equal(t, time.Duration(0), group.CatchupPeriod)
+	require.Equal(t, n, len(group.Nodes))
+	require.Equal(t, int64(449884810), group.GenesisTime)
 }
 
 // Test Start/Stop after DKG
@@ -87,10 +141,9 @@ func TestRunDKGLarge(t *testing.T) {
 func TestDrandDKGFresh(t *testing.T) {
 	n := 4
 	beaconPeriod := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	// Run DKG
 	finalGroup := dt.RunDKG()
@@ -111,10 +164,11 @@ func TestDrandDKGFresh(t *testing.T) {
 	dt.CheckBeaconLength(t, restOfNodes, 2)
 
 	t.Logf("Start last node %s", lastNode.addr)
-	dt.StartDrand(lastNode.addr, true, false)
+	dt.StartDrand(t, lastNode.addr, true, false)
 
 	// The catchup process will finish when node gets the previous beacons (1st round)
-	dt.WaitUntilRound(t, lastNode, 1)
+	err := dt.WaitUntilRound(t, lastNode, 1)
+	require.NoError(t, err)
 
 	dt.AdvanceMockClock(t, beaconPeriod)
 
@@ -123,7 +177,7 @@ func TestDrandDKGFresh(t *testing.T) {
 
 	t.Log("Check Beacon Public")
 	response := dt.CheckPublicBeacon(lastNode.addr, false)
-	assert.Equal(t, uint64(2), response.Round)
+	require.Equal(t, uint64(2), response.Round)
 }
 
 // Test dkg when two nodes cannot broadcast messages between them. The rest of the nodes
@@ -136,10 +190,9 @@ func TestRunDKGBroadcastDeny(t *testing.T) {
 	n := 4
 	thr := 3
 	beaconPeriod := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, thr, beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	// close connection between a pair of nodes
 	node1 := dt.nodes[1]
@@ -176,10 +229,9 @@ func TestRunDKGReshareForce(t *testing.T) {
 	oldThreshold := 3
 	timeout := 1 * time.Second
 	beaconPeriod := 2 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
 
@@ -255,15 +307,15 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 	oldNodes, newNodes := 3, 4
 	oldThreshold, newThreshold := 2, 3
 	timeout, beaconPeriod := 1*time.Second, 2*time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
 
 	dt.SetMockClock(t, group1.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
 	// move to genesis time - so nodes start to make a round
 	// dt.AdvanceMockClock(t,offsetGenesis)
@@ -280,13 +332,15 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 	dt.SetupNewNodes(t, nodesToAdd)
 
 	// we want to stop one node right after the group is created
-	nodeToStop := 1
+	nodeIndexToStop := 1
+	nodeToStop := dt.nodes[nodeIndexToStop]
 	leader := 0
 
 	dt.nodes[leader].drand.setupCB = func(g *key.Group) {
-		t.Logf("Stopping node %d \n", nodeToStop)
-		dt.nodes[nodeToStop].daemon.Stop(context.Background())
-		t.Logf("Node %d stopped \n", nodeToStop)
+		t.Logf("Stopping node for test: %s \n", nodeToStop.addr)
+		nodeToStop.daemon.Stop(context.Background())
+		<-nodeToStop.daemon.WaitExit()
+		t.Logf("Node %d stopped \n", nodeIndexToStop)
 	}
 
 	t.Log("Setup reshare done. Starting reshare... Ignoring reshare errors")
@@ -301,28 +355,29 @@ func TestRunDKGReshareAbsentNode(t *testing.T) {
 	require.NotNil(t, newGroup)
 
 	// the node that had stopped must not be in the group
-	t.Logf("Check node %d is not included in the group \n", nodeToStop)
-	missingPublic := dt.nodes[nodeToStop].drand.priv.Public
+	t.Logf("Check node %d is not included in the group \n", nodeIndexToStop)
+	missingPublic := nodeToStop.drand.priv.Public
 	require.Nil(t, newGroup.Find(missingPublic), "missing public is found", missingPublic)
 }
 
-// nolint:funlen
 // The test creates the scenario where one node made a complaint during the DKG, at the second phase, so normally,
 // there should be a "Justification" at the third phase. In this case, there is not. This scenario
 // can happen if there is an offline node right at the beginning of DKG that don't even send any message.
+//
+//nolint:funlen
 func TestRunDKGReshareTimeout(t *testing.T) {
 	oldNodes, newNodes, oldThreshold, newThreshold := 3, 4, 2, 3
 	timeout, beaconPeriod := 1*time.Second, 2*time.Second
 	offline := 1
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, oldNodes, oldThreshold, beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
 
 	dt.SetMockClock(t, group1.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
 	// move to genesis time - so nodes start to make a round
 	// dt.AdvanceMockClock(t,offsetGenesis)
@@ -342,9 +397,10 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	t.Log("Setup reshare done. Starting reshare.")
 
 	// run the resharing
-	var doneReshare = make(chan *key.Group)
+	doneReshare := make(chan *key.Group)
 	go func() {
 		t.Log("[reshare] Start reshare")
+		// XXX: notice that the RunReshare is already running AdvanceMockClock on its own after a while!!
 		group, err := dt.RunReshare(t,
 			&reshareConfig{
 				oldRun:  nodesToKeep,
@@ -357,19 +413,8 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	}()
 	time.Sleep(3 * time.Second)
 
-	t.Log("Move to response phase")
-	dt.AdvanceMockClock(t, timeout)
-
 	// TODO: How to remove this sleep? How to check when a node is at this stage
 	// at this point in time, nodes should have gotten all deals and send back their responses to all nodes
-	time.Sleep(getSleepDuration())
-
-	t.Log("Move to justification phase")
-	dt.AdvanceMockClock(t, timeout)
-
-	// TODO: How to remove this sleep? How to check when a node is at this stage
-	// at this time, all nodes received the responses of each other nodes but
-	// there is one node missing so they expect justifications
 	time.Sleep(getSleepDuration())
 
 	// TODO: How to remove this sleep? How to check when a node is at this stage
@@ -377,9 +422,6 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	dt.AdvanceMockClock(t, timeout)
 
 	time.Sleep(getSleepDuration())
-	// at this time they received no justification from the missing node so he's
-	// excluded of the group and the dkg should finish
-	// time.Sleep(10 * time.Second)
 
 	var resharedGroup *key.Group
 	select {
@@ -389,6 +431,8 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	}
 
 	t.Logf("[reshare] Group: %s", resharedGroup)
+
+	require.NotNil(t, resharedGroup)
 
 	transitionTime := resharedGroup.TransitionTime
 	now := dt.Now().Unix()
@@ -416,14 +460,17 @@ func TestRunDKGReshareTimeout(t *testing.T) {
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
 	require.NoError(t, err)
 	for _, n := range dt.resharedNodes[1:] {
-		resp2, err := client.PublicRand(ctx, n.drand.priv.Public, new(drand.PublicRandRequest))
+		// Make sure we pull the same round from the rest of the nodes as we received from the leader
+		req := &drand.PublicRandRequest{Round: resp.Round}
+		resp2, err := client.PublicRand(ctx, n.drand.priv.Public, req)
 		require.NoError(t, err)
 		require.Equal(t, resp, resp2)
 	}
 }
 
-// nolint:funlen
 // This test is where a client can stop the resharing in process and start again
+//
+//nolint:funlen
 func TestRunDKGResharePreempt(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping testing in CI environment")
@@ -434,15 +481,15 @@ func TestRunDKGResharePreempt(t *testing.T) {
 	Thr := 2
 	timeout := 1 * time.Second
 	beaconPeriod := 2 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, oldN, Thr, beaconPeriod, sch, beaconID)
-	defer dt.Cleanup()
 
 	group1 := dt.RunDKG()
 
 	dt.SetMockClock(t, group1.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
 	// move to genesis time - so nodes start to make a round
 	t.Log("Check Beacon Length")
@@ -475,7 +522,7 @@ func TestRunDKGResharePreempt(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// run the resharing
-	var doneReshare = make(chan *key.Group, 1)
+	doneReshare := make(chan *key.Group, 1)
 	go func() {
 		g, err := dt.RunReshare(t,
 			&reshareConfig{
@@ -534,20 +581,19 @@ func TestDrandPublicChainInfo(t *testing.T) {
 	n := 10
 	thr := key.DefaultThreshold(n)
 	p := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
 	chainInfo := chain.NewChainInfo(group)
 	certManager := dt.nodes[0].drand.opts.certmanager
-	client := NewGrpcClientFromCert(group.Hash(), certManager)
+	client := NewGrpcClientFromCert(chainInfo.Hash(), certManager)
 
 	for i, node := range dt.nodes {
 		d := node.drand
-		t.Logf("Getting chaing info from node %d \n", i)
+		t.Logf("Getting chain info from node %d \n", i)
 		received, err := client.ChainInfo(d.priv.Public)
 
 		require.NoError(t, err, fmt.Sprintf("addr %s", node.addr))
@@ -590,10 +636,9 @@ func TestDrandPublicRand(t *testing.T) {
 	n := 4
 	thr := key.DefaultThreshold(n)
 	p := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
@@ -601,9 +646,10 @@ func TestDrandPublicRand(t *testing.T) {
 	rootID := root.priv.Public
 
 	dt.SetMockClock(t, group.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
-	err := dt.WaitUntilRound(t, dt.nodes[0], 1)
+	err = dt.WaitUntilRound(t, dt.nodes[0], 1)
 	require.NoError(t, err)
 
 	// do a few periods
@@ -655,10 +701,9 @@ func TestDrandPublicStream(t *testing.T) {
 	n := 4
 	thr := key.DefaultThreshold(n)
 	p := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
@@ -666,7 +711,8 @@ func TestDrandPublicStream(t *testing.T) {
 	rootID := root.drand.priv.Public
 
 	dt.SetMockClock(t, group.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
 	// do a few periods
 	for i := 0; i < 3; i++ {
@@ -688,6 +734,7 @@ func TestDrandPublicStream(t *testing.T) {
 	t.Log("Getting the last round first with PublicRand method")
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
 	require.NoError(t, err)
+	require.Equal(t, uint64(4), resp.Round)
 
 	//  run streaming and expect responses
 	req := &drand.PublicRandRequest{Round: resp.GetRound()}
@@ -698,10 +745,10 @@ func TestDrandPublicStream(t *testing.T) {
 	t.Log("Waiting to receive the first round as the node should have it now...")
 	select {
 	case beacon := <-respCh:
-		t.Logf("First round rcv %d \n", resp.GetRound())
-		require.Equal(t, beacon.GetRound(), resp.GetRound())
+		t.Logf("First round rcv %d \n", beacon.GetRound())
+		require.Equal(t, resp.GetRound(), beacon.GetRound())
 
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(200 * time.Millisecond):
 		t.Logf("First round NOT rcv. Timeout has passed \n")
 		require.True(t, false, "too late for the first round, it didn't reply in time")
 	}
@@ -710,15 +757,16 @@ func TestDrandPublicStream(t *testing.T) {
 	// we expect the next one now
 	initRound := resp.Round + 1
 	maxRound := initRound + uint64(nTry)
-	t.Logf("Streaming for future rounds starting from %d", initRound)
+	t.Logf("Streaming for future rounds starting from %d until round %d", initRound, maxRound)
 
 	for round := initRound; round < maxRound; round++ {
+		t.Logf("advancing clock for round %d\n", round)
 		// move time to next period
 		dt.AdvanceMockClock(t, group.Period)
 
 		select {
 		case beacon := <-respCh:
-			require.Equal(t, beacon.GetRound(), round)
+			require.Equal(t, round, beacon.GetRound())
 		case <-time.After(1 * time.Second):
 			t.Logf("Round %d NOT rcv. Timeout has passed \n", round)
 			require.True(t, false, fmt.Sprintf("too late for streaming, round %d didn't reply in time", round))
@@ -750,20 +798,34 @@ func TestDrandPublicStream(t *testing.T) {
 	}
 }
 
-// nolint:funlen
+func expectChanFail(t *testing.T, errCh chan error) {
+	t.Helper()
+	select {
+	case e := <-errCh:
+		if errors.Is(e, io.EOF) {
+			t.Fatal("should have errored but got EOF")
+		}
+		t.Logf("An error was received as expected: %v", e)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("An error should have been received.")
+	}
+}
+
 // This test makes sure the "FollowChain" grpc method works fine
+//
+//nolint:funlen
 func TestDrandFollowChain(t *testing.T) {
 	n, p := 4, 1*time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), p, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 	rootID := dt.nodes[0].drand.priv.Public
 
 	dt.SetMockClock(t, group.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
 
 	// do a few periods
 	for i := 0; i < 6; i++ {
@@ -793,64 +855,74 @@ func TestDrandFollowChain(t *testing.T) {
 	tls := true
 
 	// First try with an invalid hash info
-	t.Logf("Trying to follow with an invalid address\n")
-
+	t.Logf(" \t [-] Trying to follow with an invalid hash\n")
 	ctx, cancel = context.WithCancel(context.Background())
 	_, errCh, _ := newClient.StartFollowChain(ctx, "deadbeef", addrToFollow, tls, 10000, beaconID)
+	expectChanFail(t, errCh)
+	cancel()
 
-	select {
-	case <-errCh:
-		t.Logf("An error was received as the address is invalid")
-	case <-time.After(100 * time.Millisecond):
-		t.Logf("An error should have been received as the address is invalid")
-		panic("should have errored")
-	}
+	// testing with a non hex hash
+	t.Logf(" \t [-] Trying to follow with a non-hex hash\n")
+	ctx, cancel = context.WithCancel(context.Background())
+	_, _, err = newClient.StartFollowChain(ctx, "tutu", addrToFollow, tls, 10000, beaconID)
+	require.Error(t, err)
+	cancel()
 
-	_, errCh, _ = newClient.StartFollowChain(ctx, "tutu", addrToFollow, tls, 10000, beaconID)
-	select {
-	case <-errCh:
-		t.Logf("An error was received as the address is invalid")
-	case <-time.After(100 * time.Millisecond):
-		t.Logf("An error should have been received as the address is invalid")
-		panic("should have errored")
-	}
+	// testing with a invalid beaconID
+	t.Logf("T \t [-] rying to follow with an invalid beaconID\n")
+	ctx, cancel = context.WithCancel(context.Background())
+	_, errCh, _ = newClient.StartFollowChain(ctx, hash, addrToFollow, tls, 10000, "tutu")
+	expectChanFail(t, errCh)
+	cancel()
 
 	fn := func(upTo, exp uint64) {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
 
-		t.Logf("Starting to follow chain with a valid address\n")
-		t.Logf("%s", hash)
+		t.Logf(" \t [-] Starting to follow chain with a valid hash. %d <= %d \n", upTo, exp)
+		t.Logf(" \t\t --> beaconID: %s ; hash-chain: %s", beaconID, hash)
 		progress, errCh, err := newClient.StartFollowChain(ctx, hash, addrToFollow, tls, upTo, beaconID)
 		require.NoError(t, err)
 
-		var goon = true
-		for goon {
+		for goon := true; goon; {
 			select {
 			case p, ok := <-progress:
+				t.Logf(" \t\t --> Received progress: %d / %d \n", p.Current, p.Target)
 				if ok && p.Current == exp {
-					t.Logf("Successful beacion rcv. Round: %d. Keep following chain.", exp)
+					t.Logf("\t\t -->Successful beacon rcv. Round: %d.", exp)
+					goon = false
+				}
+			case e := <-errCh:
+				if errors.Is(e, io.EOF) { // means we've reached the end
+					t.Logf("\t\t -->Got EOF from daemon.")
 					goon = false
 					break
 				}
-			case e := <-errCh:
-				if e == io.EOF {
-					break
-				}
+				t.Logf("\t\t -->Unexpected error received: %v.", e)
 				require.NoError(t, e)
-			case <-time.After(1 * time.Second):
-				t.FailNow()
+			case <-time.After(2 * time.Second):
+				t.Fatalf("\t\t --> Timeout during test")
 			}
 		}
+
+		t.Logf(" \t\t --> Done, proceeding to check store now.\n")
 
 		// cancel the operation
 		cancel()
 
-		// check if the beacon is in the database
-		store, err := newNode.drand.createBoltStore(beaconID)
-		require.NoError(t, err)
-		defer store.Close()
+		// (Postgres) Database operations need to have a proper context to work.
+		// We create a new one, since we canceled the previous one.
+		ctx = context.Background()
 
-		lastB, err := store.Last()
+		// check if the beacon is in the database
+		store := newNode.drand.dbStore
+		if newNode.drand.opts.dbStorageEngine == chain.BoltDB {
+			store, err = newNode.drand.createDBStore()
+			require.NoError(t, err)
+		}
+		require.NoError(t, err)
+		defer store.Close(ctx)
+
+		lastB, err := store.Last(ctx)
 		require.NoError(t, err)
 		require.Equal(t, exp, lastB.Round, "found %d vs expected %d", lastB.Round, exp)
 	}
@@ -859,21 +931,162 @@ func TestDrandFollowChain(t *testing.T) {
 	fn(0, resp.GetRound())
 }
 
+// This test makes sure the "StartCheckChain" grpc method works fine
+//
+//nolint:funlen
+func TestDrandCheckChain(t *testing.T) {
+	cfg := Config{}
+	WithTestDB(t, "")[0](&cfg)
+	if cfg.dbStorageEngine == chain.MemDB {
+		t.Skip(`This test does not work with in-memory database. See the "// Skip why: " comment for details.`)
+	}
+	n, p := 4, 1*time.Second
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
+
+	dt := NewDrandTestScenario(t, n, key.DefaultThreshold(n), p, sch, beaconID)
+
+	group := dt.RunDKG()
+	rootID := dt.nodes[0].drand.priv.Public
+
+	dt.SetMockClock(t, group.GenesisTime)
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	require.NoError(t, err)
+
+	// do a few periods
+	for i := 0; i < 6; i++ {
+		dt.AdvanceMockClock(t, group.Period)
+
+		// +2 because rounds start at 1, and at genesis time, drand generates
+		// first round already
+		err := dt.WaitUntilRound(t, dt.nodes[0], uint64(i+2))
+		require.NoError(t, err)
+	}
+
+	client := net.NewGrpcClientFromCertManager(dt.nodes[0].drand.opts.certmanager)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// get last round first
+	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
+	require.NoError(t, err)
+	current := resp.GetRound()
+
+	t.Log(current)
+
+	ctrlClient, err := net.NewControlClient(dt.nodes[0].drand.opts.controlPort)
+	require.NoError(t, err)
+	tls := true
+
+	// First try with an invalid hash info
+	t.Logf("Trying to resync with an invalid address\n")
+
+	_, errCh, _ := ctrlClient.StartCheckChain(context.Background(), "deadbeef", nil, tls, 10000, beaconID)
+	expectChanFail(t, errCh)
+
+	// Next trying with a fully valid chain
+	cancel()
+	ctx, cancel = context.WithCancel(context.Background())
+	hash := fmt.Sprintf("%x", chain.NewChainInfo(group).Hash())
+	addrToFollow := []string{rootID.Address()}
+	upTo := uint64(5)
+
+	t.Logf(" \t [-] Starting resync chain with a valid hash.")
+	t.Logf(" \t\t --> beaconID: %s ; hash-chain: %s", beaconID, hash)
+	progress, errCh, err := ctrlClient.StartCheckChain(ctx, hash, addrToFollow, tls, upTo, beaconID)
+	require.NoError(t, err)
+	consumeProgress(t, progress, errCh, upTo, true)
+	// check that progress is (0, 0)
+	consumeProgress(t, progress, errCh, 0, false)
+
+	t.Logf(" \t\t --> Done, canceling.\n")
+	cancel()
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Logf(" \t\t --> Stopping node.s\n")
+	dt.StopMockNode(dt.nodes[0].addr, false)
+
+	t.Logf(" \t\t --> Done, proceeding to modify store now.\n")
+	store := dt.nodes[0].drand.dbStore
+	if dt.nodes[0].drand.opts.dbStorageEngine == chain.BoltDB {
+		store, err = dt.nodes[0].drand.createDBStore()
+		require.NoError(t, err)
+	}
+
+	t.Logf(" \t\t --> Opened store. Getting 4th beacon\n")
+	beac, err := store.Get(ctx, upTo-1)
+	require.NoError(t, err)
+	require.Equal(t, upTo-1, beac.Round, "found %d vs expected %d", beac.Round, upTo-1)
+
+	t.Logf(" \t\t --> Deleting 4th beacon.\n")
+	err = store.Del(ctx, upTo-1)
+	require.NoError(t, err)
+	err = store.Close(ctx)
+	require.NoError(t, err)
+
+	t.Logf(" \t\t --> Re-Starting node.\n")
+
+	// Skip why: This call will create a new database connection.
+	//  However, for the MemDB engine type, this means we create a new backing array from scratch
+	//  thus removing all previous items from memory. At that point, this invalidates the test.
+	dt.StartDrand(t, dt.nodes[0].addr, false, false)
+
+	t.Logf(" \t\t --> Making sure the beacon is now missing.\n")
+	_, err = client.PublicRand(ctx, rootID, &drand.PublicRandRequest{Round: upTo - 1})
+	require.Error(t, err)
+
+	t.Logf(" \t\t --> Re-Running resync in dry run.\n")
+	progress, errCh, err = ctrlClient.StartCheckChain(ctx, hash, addrToFollow, tls, upTo, beaconID)
+	require.NoError(t, err)
+	consumeProgress(t, progress, errCh, upTo, true)
+	// check that progress is (0, 1)
+	consumeProgress(t, progress, errCh, 1, false)
+
+	// we wait to make sure everything is done on the sync manager side before testing.
+	time.Sleep(time.Second)
+
+	// check dry-run worked and we still get an error
+	_, err = client.PublicRand(ctx, rootID, &drand.PublicRandRequest{Round: upTo - 1})
+	require.Error(t, err)
+
+	t.Logf(" \t\t --> Re-Running resync and correct the error.\n")
+	progress, errCh, err = ctrlClient.StartCheckChain(ctx, hash, nil, tls, upTo, beaconID)
+	require.NoError(t, err)
+	consumeProgress(t, progress, errCh, upTo, true)
+	// check that progress is (0, 1)
+	consumeProgress(t, progress, errCh, 1, false)
+	// goes on with correcting the chain
+	consumeProgress(t, progress, errCh, 1, true)
+	// now the progress chan should be closed
+	_, ok := <-progress
+	require.False(t, ok)
+
+	// we wait to make sure everything is done on the sync manager side before testing.
+	time.Sleep(time.Second)
+
+	// check we don't get an error anymore
+	resp, err = client.PublicRand(ctx, rootID, &drand.PublicRandRequest{Round: upTo - 1})
+	require.NoError(t, err)
+	require.Equal(t, upTo-1, resp.Round)
+}
+
 // Test if we can correctly fetch the rounds through the local proxy
 func TestDrandPublicStreamProxy(t *testing.T) {
 	n := 4
 	thr := key.DefaultThreshold(n)
 	p := 1 * time.Second
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
-	defer dt.Cleanup()
 
 	group := dt.RunDKG()
 
 	root := dt.nodes[0]
 	dt.SetMockClock(t, group.GenesisTime)
-	dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	err := dt.WaitUntilChainIsServing(t, dt.nodes[0])
+	if err != nil {
+		t.Log("Error waiting until chain is serving:", err)
+		t.Fail()
+	}
 
 	// do a few periods
 	for i := 0; i < 3; i++ {
@@ -924,4 +1137,120 @@ func TestDrandPublicStreamProxy(t *testing.T) {
 		t.Logf("Round received %d", beacon.Round())
 		require.Equal(t, round, beacon.Round())
 	}
+}
+
+func TestReshareWithInvalidBeaconIdInMetadataFailsButNoSegfault(t *testing.T) {
+	n := 3
+	thr := key.DefaultThreshold(n)
+	p := 1 * time.Second
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
+
+	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
+	_ = dt.RunDKG()
+
+	nonsenseBeaconID := "completely made up"
+	resharePacket := drand.InitResharePacket{
+		Old: &drand.GroupInfo{
+			Location: &drand.GroupInfo_Path{
+				Path: "http://localhost:8080",
+			},
+		},
+		Info: &drand.SetupInfoPacket{
+			Leader:        false,
+			LeaderAddress: "whatever",
+			LeaderTls:     false,
+			Nodes:         uint32(n),
+			Threshold:     uint32(thr),
+			Timeout:       100,
+			BeaconOffset:  100,
+			DkgOffset:     1,
+			Secret:        []byte("doesntmatter"),
+			Force:         false,
+		},
+		Metadata: &common.Metadata{
+			BeaconID: nonsenseBeaconID,
+		},
+	}
+	_, err := dt.nodes[1].daemon.InitReshare(context.Background(), &resharePacket)
+	require.EqualError(
+		t,
+		err,
+		"beacon with ID "+nonsenseBeaconID+" could not be found - make sure you have passed the id flag or have a default beacon",
+	)
+}
+
+func TestReshareWithoutOldGroupFailsButNoSegfault(t *testing.T) {
+	n := 3
+	thr := key.DefaultThreshold(n)
+	p := 1 * time.Second
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
+
+	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
+	_ = dt.RunDKG()
+
+	resharePacket := drand.InitResharePacket{
+		Old: nil,
+		Info: &drand.SetupInfoPacket{
+			Leader:        false,
+			LeaderAddress: "whatever",
+			LeaderTls:     false,
+			Nodes:         uint32(n),
+			Threshold:     uint32(thr),
+			Timeout:       100,
+			BeaconOffset:  100,
+			DkgOffset:     1,
+			Secret:        []byte("doesntmatter"),
+			Force:         false,
+		},
+	}
+
+	_, err := dt.nodes[1].daemon.InitReshare(context.Background(), &resharePacket)
+	require.EqualError(t, err, "cannot reshare without an old group")
+}
+
+func TestModifyingGroupFileManuallyDoesNotSegfault(t *testing.T) {
+	// set up 3 nodes for a test
+	n := 3
+	thr := key.DefaultThreshold(n)
+	p := 1 * time.Second
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
+
+	dt := NewDrandTestScenario(t, n, thr, p, sch, beaconID)
+
+	node := dt.nodes[0]
+	dir := dt.dir
+	priv := node.drand.priv
+
+	// set a persistent keystore, as the normal test ones are ephemeral
+	store := key.NewFileStore(dir, beaconID)
+	node.drand.store = store
+
+	// save the key pair, as this was done ephemerally inside of `NewDrandTestScenario` >.>
+	err := store.SaveKeyPair(priv)
+	require.NoError(t, err)
+
+	// run a DKG so that every node gets a group file and key share
+	_ = dt.RunDKG()
+
+	// stop the node and wait for it
+	node.daemon.Stop(context.Background())
+	<-node.daemon.exitCh
+
+	// modify your entry (well, all of them!) in the group file to change the TLS status
+	groupPath := path.Join(dir, beaconID, key.GroupFolderName, "drand_group.toml")
+
+	// read
+	groupFileReader, err := fs.Open(groupPath)
+	require.NoError(t, err)
+	groupFile, err := io.ReadAll(groupFileReader)
+	require.NoError(t, err)
+	// write
+	err = os.WriteFile(groupPath, []byte(strings.ReplaceAll(string(groupFile), "true", "false")), 0o740)
+	require.NoError(t, err)
+
+	// try and reload the beacon from the store
+	// the updated TLS status will fail verification
+	_, err = node.daemon.LoadBeaconFromStore(beaconID, store)
+
+	require.EqualError(t, err, "could not restore beacon info for the given identity - this can happen if you updated the group file manually")
 }

@@ -20,12 +20,15 @@ type TestJSON struct {
 }
 
 func main() {
-	listener, server := mock.NewMockGRPCPublicServer(serve, true, scheme.GetSchemeFromEnv())
+	listener, server := mock.NewMockGRPCPublicServer(nil, serve, true, scheme.GetSchemeFromEnv())
 	resp, err := server.PublicRand(context.TODO(), &drand.PublicRandRequest{})
 	if err != nil {
 		panic(err)
 	}
 	ci, err := server.ChainInfo(context.TODO(), &drand.ChainInfoRequest{})
+	if err != nil {
+		panic(err)
+	}
 
 	tjson := &TestJSON{
 		Public: hex.EncodeToString(ci.PublicKey),

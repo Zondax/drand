@@ -6,10 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
-
-	"github.com/drand/drand/log"
-	"github.com/drand/drand/metrics"
-	"github.com/drand/drand/protobuf/drand"
+	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -17,6 +14,10 @@ import (
 	http_grpc_server "github.com/weaveworks/common/httpgrpc/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/drand/drand/log"
+	"github.com/drand/drand/metrics"
+	"github.com/drand/drand/protobuf/drand"
 )
 
 var isGrpcPrometheusMetricsRegisted = false
@@ -54,7 +55,8 @@ func NewGRPCListenerForPrivate(
 
 	opts = append(opts,
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(grpc_prometheus.StreamServerInterceptor, s.NodeVersionStreamValidator)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, s.NodeVersionValidator)))
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, s.NodeVersionValidator)),
+	)
 
 	grpcServer := grpc.NewServer(opts...)
 
@@ -111,8 +113,9 @@ func NewRESTListenerForPublic(
 	}
 	if insecure {
 		g.restServer = &http.Server{
-			Addr:    bindingAddr,
-			Handler: handler,
+			Addr:              bindingAddr,
+			ReadHeaderTimeout: 3 * time.Second,
+			Handler:           handler,
 		}
 	} else {
 		x509KeyPair, err := tls.LoadX509KeyPair(certPath, keyPath)
@@ -128,7 +131,8 @@ func NewRESTListenerForPublic(
 
 func buildTLSServer(httpHandler http.Handler, x509KeyPair *tls.Certificate) *http.Server {
 	return &http.Server{
-		Handler: httpHandler,
+		Handler:           httpHandler,
+		ReadHeaderTimeout: 3 * time.Second,
 		TLSConfig: &tls.Config{
 			// From https://blog.cloudflare.com/exposing-go-on-the-internet/
 
@@ -200,6 +204,6 @@ func (g *grpcListener) Start() {
 }
 
 func (g *grpcListener) Stop(ctx context.Context) {
-	_ = g.lis.Close()
 	g.grpcServer.Stop()
+	_ = g.lis.Close()
 }

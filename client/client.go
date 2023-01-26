@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/metrics"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const clientStartupTimeoutDefault = time.Second * 5
@@ -173,13 +173,14 @@ type clientConfig struct {
 	fullVerify bool
 	// insecure indicates the root of trust does not need to be present.
 	insecure bool
+	// autoWatch causes the client to start watching immediately in the background so that new randomness
+	// is proactively fetched and added to the cache.
+	autoWatch bool
 	// cache size - how large of a cache to keep locally.
 	cacheSize int
 	// customized client log.
 	log log.Logger
-	// autoWatch causes the client to start watching immediately in the background so that new randomness
-	// is proactively fetched and added to the cache.
-	autoWatch bool
+
 	// autoWatchRetry specifies the time after which the watch channel
 	// created by the autoWatch is re-opened when no context error occurred.
 	autoWatchRetry time.Duration
@@ -196,6 +197,7 @@ func (c *clientConfig) tryPopulateInfo(clients ...Client) (err error) {
 			if err == nil {
 				return
 			}
+
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 )
@@ -24,11 +24,15 @@ const (
 )
 
 func mockResolver(txtRecords map[string][]string) *madns.Resolver {
-	mock := &madns.MockBackend{
+	mock := &madns.MockResolver{
 		IP:  map[string][]net.IPAddr{},
 		TXT: txtRecords,
 	}
-	return &madns.Resolver{Backend: mock}
+	resolver, err := madns.NewResolver(madns.WithDefaultResolver(mock))
+	if err != nil {
+		panic(err)
+	}
+	return resolver
 }
 
 func findPeer(t *testing.T, ais []peer.AddrInfo, peerIDStr string) peer.AddrInfo {
@@ -76,6 +80,9 @@ func TestResolveDNSNoAddrs(t *testing.T) {
 	addrs := []multiaddr.Multiaddr{multiaddr.StringCast(dnsaddr0)}
 	txtRecords := map[string][]string{"_dnsaddr.example0.com": {}}
 	_, err := resolveAddresses(context.Background(), addrs, mockResolver(txtRecords))
+	if err == nil {
+		t.Fatal("expected error, received no error")
+	}
 	if !strings.HasPrefix(err.Error(), "found no ipfs peers at") {
 		t.Fatal("unexpected error", err)
 	}
@@ -92,7 +99,11 @@ func (fb *failBackend) LookupTXT(context.Context, string) ([]string, error) {
 
 func TestResolveDNSFailure(t *testing.T) {
 	addrs := []multiaddr.Multiaddr{multiaddr.StringCast(dnsaddr0)}
-	_, err := resolveAddresses(context.Background(), addrs, &madns.Resolver{Backend: &failBackend{}})
+	resolver, _ := madns.NewResolver(madns.WithDefaultResolver(&failBackend{}))
+	_, err := resolveAddresses(context.Background(), addrs, resolver)
+	if err == nil {
+		t.Fatal("expected error, received no error")
+	}
 	if !strings.Contains(err.Error(), "failBackend") {
 		t.Fatal("unexpected error", err)
 	}

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"crypto/sha256"
 	"path"
 	"time"
 
@@ -24,7 +23,7 @@ const DefaultDBFolder = "db"
 
 // DefaultBeaconPeriod is the period in which the beacon logic creates new
 // random beacon.
-const DefaultBeaconPeriod time.Duration = 1 * time.Minute
+const DefaultBeaconPeriod = 1 * time.Minute
 
 // DefaultControlPort is the default port the functionnality control port communicate on.
 const DefaultControlPort = "8888"
@@ -34,10 +33,6 @@ const DefaultControlPort = "8888"
 // and the second phase, "as fast as possible" when the protocol runs smoothly
 // (there is no malicious party).
 const DefaultDKGTimeout = 10 * time.Second
-
-// EciesHash is the hash function used for the ECIES encryption used in the
-// private randomness feature.
-var EciesHash = sha256.New
 
 // MaxWaitPrepareDKG is the maximum time the "automatic" setting up of the group
 // can take. If the setup is still not finished after this time, it is
@@ -53,8 +48,5 @@ const DefaultGenesisOffset = 1 * time.Second
 // time will be rounded up to the next round time of the beacon, since a beacon
 // has to keep the same period.
 var DefaultResharingOffset = 30 * time.Second
-
-// PrivateRandLength is the length of expected private randomness buffers
-const PrivateRandLength = 32
 
 const callMaxTimeout = 10 * time.Second

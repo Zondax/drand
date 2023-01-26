@@ -2,7 +2,6 @@ package net
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -10,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/protobuf/drand"
-	testnet "github.com/drand/drand/test/net"
 	"github.com/kabukky/httpscerts"
 	"github.com/stretchr/testify/require"
+
+	"github.com/drand/drand/protobuf/drand"
+	testnet "github.com/drand/drand/test/net"
 )
 
 type testPeer struct {
@@ -37,9 +37,7 @@ type testRandomnessServer struct {
 func (t *testRandomnessServer) PublicRand(context.Context, *drand.PublicRandRequest) (*drand.PublicRandResponse, error) {
 	return &drand.PublicRandResponse{Round: t.round}, nil
 }
-func (t *testRandomnessServer) PrivateRand(context.Context, *drand.PrivateRandRequest) (*drand.PrivateRandResponse, error) {
-	return &drand.PrivateRandResponse{}, nil
-}
+
 func (t *testRandomnessServer) Group(context.Context, *drand.GroupRequest) (*drand.GroupPacket, error) {
 	return nil, nil
 }
@@ -83,14 +81,14 @@ func testListener(t *testing.T) {
 func testListenerTLS(t *testing.T) {
 	ctx := context.Background()
 	if run.GOOS == runtimeGOOSWindows {
-		fmt.Println("Skipping TestClientTLS as operating on Windows")
+		t.Log("Skipping TestClientTLS as operating on Windows")
 		t.Skip("crypto/x509: system root pool is not available on Windows")
 	}
 	hostAddr := "127.0.0.1"
 
-	tmpDir := path.Join(os.TempDir(), "drand-net")
+	tmpDir := path.Join(t.TempDir(), "drand-net")
 	require.NoError(t, os.MkdirAll(tmpDir, 0766))
-	defer os.RemoveAll(tmpDir)
+
 	certPath := path.Join(tmpDir, "server.crt")
 	keyPath := path.Join(tmpDir, "server.key")
 	if httpscerts.Check(certPath, keyPath) != nil {

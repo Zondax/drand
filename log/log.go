@@ -2,12 +2,19 @@ package log
 
 import (
 	"os"
+	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+type logger struct {
+	*zap.SugaredLogger
+}
+
 // Logger is a interface that can log to different levels.
+//
+//nolint:interfacebloat // We want this interface to implement the original one
 type Logger interface {
 	Info(keyvals ...interface{})
 	Debug(keyvals ...interface{})
@@ -21,7 +28,21 @@ type Logger interface {
 	Errorw(msg string, keyvals ...interface{})
 	Fatalw(msg string, keyvals ...interface{})
 	Panicw(msg string, keyvals ...interface{})
-	With(args ...interface{}) *zap.SugaredLogger
+	With(args ...interface{}) Logger
+	Named(s string) Logger
+	AddCallerSkip(skip int) Logger
+}
+
+func (l *logger) AddCallerSkip(skip int) Logger {
+	return &logger{l.WithOptions(zap.AddCallerSkip(skip))}
+}
+
+func (l *logger) With(args ...interface{}) Logger {
+	return &logger{l.SugaredLogger.With(args...)}
+}
+
+func (l *logger) Named(s string) Logger {
+	return &logger{l.SugaredLogger.Named(s)}
 }
 
 const (
@@ -38,6 +59,8 @@ const (
 // logger.
 const DefaultLevel = LogInfo
 
+var isDefaultLoggerSet sync.Once
+
 // ConfigureDefaultLogger updates the default logger to wrap a provided kit logger.
 func ConfigureDefaultLogger(output zapcore.WriteSyncer, level int, jsonFormat bool) {
 	if jsonFormat {
@@ -49,23 +72,23 @@ func ConfigureDefaultLogger(output zapcore.WriteSyncer, level int, jsonFormat bo
 
 // DefaultLogger is the default logger that only logs at the `DefaultLevel`.
 func DefaultLogger() Logger {
-	if zap.S() == nil {
+	isDefaultLoggerSet.Do(func() {
 		zap.ReplaceGlobals(NewZapLogger(nil, getConsoleEncoder(), DefaultLevel))
-	}
+	})
 
-	return zap.S()
+	return &logger{zap.S()}
 }
 
-// NewLogger returns a kit logger that prints statements at the given level.
+// NewLogger returns a logger that prints statements at the given level.
 func NewLogger(output zapcore.WriteSyncer, level int) Logger {
-	logger := NewZapLogger(output, getConsoleEncoder(), level)
-	return logger.Sugar()
+	l := NewZapLogger(output, getConsoleEncoder(), level)
+	return &logger{l.Sugar()}
 }
 
-// NewJSONLogger returns a kit logger that prints statements at the given level as JSON output.
+// NewJSONLogger returns a logger that prints statements at the given level as JSON output.
 func NewJSONLogger(output zapcore.WriteSyncer, level int) Logger {
-	logger := NewZapLogger(output, getJSONEncoder(), level)
-	return logger.Sugar()
+	l := NewZapLogger(output, getJSONEncoder(), level)
+	return &logger{l.Sugar()}
 }
 
 func NewZapLogger(output zapcore.WriteSyncer, encoder zapcore.Encoder, level int) *zap.Logger {

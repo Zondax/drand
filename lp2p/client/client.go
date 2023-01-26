@@ -5,15 +5,15 @@ import (
 	"encoding/hex"
 	"sync"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"golang.org/x/xerrors"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/lp2p"
 	"github.com/drand/drand/protobuf/drand"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"golang.org/x/xerrors"
-	"google.golang.org/protobuf/proto"
 )
 
 // Client is a concrete pubsub client implementation
@@ -129,7 +129,7 @@ func NewWithPubsub(ps *pubsub.PubSub, info *chain.Info, cache client.Cache) (*Cl
 type UnsubFunc func()
 
 // Sub subscribes to notfications about new randomness.
-// Client instnace owns the channel after it is passed to Sub function,
+// Client instance owns the channel after it is passed to Sub function,
 // thus the channel should not be closed by library user
 //
 // It is recommended to use a buffered channel. If the channel is full,
@@ -155,12 +155,19 @@ func (c *Client) Watch(ctx context.Context) <-chan client.Result {
 	outerCh := make(chan client.Result)
 	end := c.Sub(innerCh)
 
+	w := sync.WaitGroup{}
+	w.Add(1)
+
 	go func() {
+		defer close(outerCh)
+
+		w.Done()
+
 		for {
 			select {
-			case resp, ok := <-innerCh:
+			// TODO: do not copy by assignment any drand.PublicRandResponse
+			case resp, ok := <-innerCh: //nolint:govet
 				if !ok {
-					close(outerCh)
 					return
 				}
 				dat := &client.RandomData{
@@ -174,19 +181,23 @@ func (c *Client) Watch(ctx context.Context) <-chan client.Result {
 				}
 				select {
 				case outerCh <- dat:
+					c.log.Debugw("processed random beacon", "round", dat.Round())
 				default:
 					c.log.Warnw("", "gossip client", "randomness notification dropped due to a full channel")
 				}
 			case <-ctx.Done():
-				close(outerCh)
+				c.log.Debugw("client.Watch done")
 				end()
 				// drain leftover on innerCh
 				for range innerCh {
 				}
+				c.log.Debugw("client.Watch finished draining the innerCh")
 				return
 			}
 		}
 	}()
+
+	w.Wait()
 
 	return outerCh
 }

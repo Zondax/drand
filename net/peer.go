@@ -40,15 +40,16 @@ func CreatePeer(addr string, tls bool) Peer {
 // RemoteAddress returns the address of the peer by first taking the address
 // that gRPC returns. If that address is a reserved address, then it tries to
 // read the "X-REAL-IP" header content.
-// For example, a valid nging config could include
+// For example, a valid nginx config could include
 //
 // ```
-// location / {
-//       grpc_pass grpc://127.0.0.1:9091;
-//       grpc_set_header X-Real-IP $remote_addr;
-// }
-// ```
 //
+//	location / {
+//	      grpc_pass grpc://127.0.0.1:9091;
+//	      grpc_set_header X-Real-IP $remote_addr;
+//	}
+//
+// ```
 func RemoteAddress(c context.Context) string {
 	p, ok := peer.FromContext(c)
 	str := ""
@@ -85,6 +86,10 @@ func RemoteAddress(c context.Context) string {
 		return str
 	}
 	vals := md.Get("x-real-ip")
+	if len(vals) > 0 {
+		return vals[0]
+	}
+	vals = md.Get("x-forwarded-for")
 	if len(vals) > 0 {
 		return vals[0]
 	}

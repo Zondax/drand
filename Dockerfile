@@ -1,4 +1,4 @@
-FROM golang:1.17.1-buster AS builder
+FROM golang:1.19.2-buster AS builder
 MAINTAINER Hector Sanjuan <hector@protocol.ai>
 
 ARG major=0
@@ -32,13 +32,12 @@ RUN go mod download
 COPY . $SRC_PATH
 RUN \
   go install \
-    -mod=readonly \
-    -ldflags \
-        "-X github.com/drand/drand/common.MAJOR=${major} \
-        -X github.com/drand/drand/common.MINOR=${minor} \
-        -X github.com/drand/drand/common.PATCH=${patch} \
-        -X github.com/drand/drand/cmd/drand-cli.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` \
-        -X github.com/drand/drand/cmd/drand-cli.gitCommit=${gitCommit}"
+  -mod=readonly \
+  -ldflags \
+  "-X github.com/drand/drand/common.COMMIT=${gitCommit} \
+  -X github.com/drand/drand/common.BUILDDATE=`date -u +%d/%m/%Y@%H:%M:%S` \
+  -X github.com/drand/drand/cmd/drand-cli.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` \
+  -X github.com/drand/drand/cmd/drand-cli.gitCommit=${gitCommit}"
 
 FROM busybox:1-glibc
 MAINTAINER Hector Sanjuan <hector@protocol.ai>
@@ -58,14 +57,12 @@ COPY --from=builder /tmp/tini /sbin/tini
 COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 
 RUN mkdir -p $DRAND_HOME && \
-    addgroup -g 994 drand && \
-    adduser -D -h $DRAND_HOME -u 996 -G drand drand && \
-    chown drand:drand $DRAND_HOME
+  addgroup -g 994 drand && \
+  adduser -D -h $DRAND_HOME -u 996 -G drand drand && \
+  chown drand:drand $DRAND_HOME
 
 VOLUME $DRAND_HOME
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 
 # Defaults for drand go here
 CMD ["start", "--tls-disable", "--control 8888", "--private-listen 0.0.0.0:4444"]
-
-

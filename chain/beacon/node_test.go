@@ -10,35 +10,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/drand/drand/common"
-
-	"github.com/drand/drand/common/scheme"
+	clock "github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/require"
 
 	"github.com/drand/drand/chain"
-	"github.com/drand/drand/chain/boltdb"
+	"github.com/drand/drand/common"
+	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/net"
+	pbCommon "github.com/drand/drand/protobuf/common"
 	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/drand/test"
 	testnet "github.com/drand/drand/test/net"
 	"github.com/drand/kyber"
 	"github.com/drand/kyber/share"
 	"github.com/drand/kyber/util/random"
-	clock "github.com/jonboulle/clockwork"
-	"github.com/stretchr/testify/require"
 )
 
-// TODO make beacon tests not dependant on key.Scheme
+// TODO make beacon tests not dependent on key.Scheme
 
 // testBeaconServer implements a barebone service to be plugged in a net.DefaultService
 type testBeaconServer struct {
+	sync.Mutex
 	disable bool
 	*testnet.EmptyServer
 	h *Handler
 }
 
 func (t *testBeaconServer) PartialBeacon(c context.Context, in *drand.PartialBeaconPacket) (*drand.Empty, error) {
+	t.Lock()
+	defer t.Unlock()
+
 	if t.disable {
 		return nil, errors.New("disabled server")
 	}
@@ -49,7 +52,7 @@ func (t *testBeaconServer) SyncChain(req *drand.SyncRequest, p drand.Protocol_Sy
 	if t.disable {
 		return errors.New("disabled server")
 	}
-	return t.h.chain.sync.SyncChain(req, p)
+	return SyncChain(t.h.l, t.h.chain, req, p)
 }
 
 func dkgShares(_ *testing.T, n, t int) ([]*key.Share, []kyber.Point) {
@@ -83,6 +86,7 @@ func dkgShares(_ *testing.T, n, t int) ([]*key.Share, []kyber.Point) {
 	}
 	msg := []byte("Hello world")
 	sigs := make([][]byte, n)
+
 	_, commits := pubPoly.Info()
 	dkgShares := make([]*key.Share, n)
 	for i := 0; i < n; i++ {
@@ -99,6 +103,7 @@ func dkgShares(_ *testing.T, n, t int) ([]*key.Share, []kyber.Point) {
 	if err != nil {
 		panic(err)
 	}
+
 	if err := key.Scheme.VerifyRecovered(pubPoly.Commit(), msg, sig); err != nil {
 		panic(err)
 	}
@@ -134,8 +139,7 @@ type BeaconTest struct {
 }
 
 func NewBeaconTest(t *testing.T, n, thr int, period time.Duration, genesisTime int64, sch scheme.Scheme, beaconID string) *BeaconTest {
-	prefix, err := os.MkdirTemp(os.TempDir(), beaconID)
-	checkErr(err)
+	prefix := t.TempDir()
 	paths := createBoltStores(prefix, n)
 	shares, commits := dkgShares(t, n, thr)
 	privs, group := test.BatchIdentities(n, sch, beaconID)
@@ -162,7 +166,7 @@ func NewBeaconTest(t *testing.T, n, thr int, period time.Duration, genesisTime i
 
 	for i := 0; i < n; i++ {
 		bt.CreateNode(t, i)
-		t.Logf("Creating node %d/%d", i, n)
+		t.Logf("Creating node %d/%d", i+1, n)
 	}
 	return bt
 }
@@ -190,10 +194,10 @@ func (b *BeaconTest) CreateNode(t *testing.T, i int) {
 	node.private = priv
 	keyShare := findShare(idx)
 	node.shares = keyShare
-	store, err := boltdb.NewBoltStore(b.paths[idx], nil)
-	if err != nil {
-		panic(err)
-	}
+
+	l := test.Logger(t)
+	store, err := createStore(t, l, b, idx)
+	require.NoError(t, err)
 	node.clock = clock.NewFakeClockAt(b.time.Now())
 	conf := &Config{
 		Group:  b.group,
@@ -202,8 +206,8 @@ func (b *BeaconTest) CreateNode(t *testing.T, i int) {
 		Clock:  node.clock,
 	}
 
-	logger := log.NewLogger(nil, log.LogDebug)
-	version := common.Version{Major: 0, Minor: 0, Patch: 0}
+	logger := log.NewLogger(nil, log.LogDebug).Named("BeaconTest").Named(knode.Addr).Named(fmt.Sprint(idx))
+	version := common.GetAppVersion()
 	node.handler, err = NewHandler(net.NewGrpcClient(), store, conf, logger, version)
 	checkErr(err)
 	if node.callback != nil {
@@ -211,7 +215,7 @@ func (b *BeaconTest) CreateNode(t *testing.T, i int) {
 	}
 
 	if node.handler.addr != node.private.Public.Address() {
-		panic("Oh Oh")
+		panic("createNode address mismatch")
 	}
 
 	currSig, err := key.Scheme.Sign(node.handler.conf.Share.PrivateShare(), []byte("hello"))
@@ -221,7 +225,7 @@ func (b *BeaconTest) CreateNode(t *testing.T, i int) {
 		panic("invalid index")
 	}
 	b.nodes[idx] = node
-	t.Logf("NODE index %d --> Listens on %s || Clock pointer %p\n", idx, priv.Public.Address(), b.nodes[idx].handler.conf.Clock)
+	t.Logf("Created NODE index %d --> Listens on %s || Clock pointer %p\n", idx, priv.Public.Address(), b.nodes[idx].handler.conf.Clock)
 	for i, n := range b.nodes {
 		for j, n2 := range b.nodes {
 			if i == j {
@@ -232,6 +236,11 @@ func (b *BeaconTest) CreateNode(t *testing.T, i int) {
 			}
 		}
 	}
+	t.Cleanup(func() {
+		t.Log("Stopping node:", idx)
+		b.StopBeacon(idx)
+		t.Log("Node stopped:", idx)
+	})
 }
 
 func (b *BeaconTest) ServeBeacon(t *testing.T, i int) {
@@ -325,22 +334,11 @@ func (b *BeaconTest) StopBeacon(i int) {
 		if !n.started {
 			return
 		}
-		n.listener.Stop(context.Background())
 		n.handler.Stop()
+		n.listener.Stop(context.Background())
 		n.started = false
 	}
 	delete(b.nodes, j)
-}
-
-func (b *BeaconTest) StopAll() {
-	for _, n := range b.nodes {
-		b.StopBeacon(n.index)
-	}
-}
-
-func (b *BeaconTest) CleanUp() {
-	deleteBoltStores(b.prefix)
-	b.StopAll()
 }
 
 func (b *BeaconTest) DisableReception(count int) {
@@ -351,7 +349,9 @@ func (b *BeaconTest) DisableReception(count int) {
 
 func (b *BeaconTest) EnableReception(count int) {
 	for i := 0; i < count; i++ {
+		b.nodes[i].server.Lock()
 		b.nodes[i].server.disable = false
+		b.nodes[i].server.Unlock()
 	}
 }
 
@@ -372,11 +372,7 @@ func createBoltStores(prefix string, n int) []string {
 	return paths
 }
 
-func deleteBoltStores(prefix string) {
-	os.RemoveAll(prefix)
-}
-
-func checkWait(counter *sync.WaitGroup) {
+func checkWait(t *testing.T, counter *sync.WaitGroup) {
 	var doneCh = make(chan bool, 1)
 	go func() {
 		counter.Wait()
@@ -385,9 +381,8 @@ func checkWait(counter *sync.WaitGroup) {
 	select {
 	case <-doneCh:
 		break
-
-	case <-time.After(20 * time.Second):
-		panic("outdated beacon time")
+	case <-time.After(30 * time.Second):
+		t.Fatal("outdated beacon time")
 	}
 }
 
@@ -398,10 +393,9 @@ func TestBeaconSync(t *testing.T) {
 
 	genesisOffset := 2 * time.Second
 	genesisTime := clock.NewFakeClock().Now().Add(genesisOffset).Unix()
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch, beaconID)
-	defer bt.CleanUp()
 
 	verifier := chain.NewVerifier(sch)
 
@@ -419,7 +413,7 @@ func TestBeaconSync(t *testing.T) {
 	doRound := func(count int, move time.Duration) {
 		counter.Add(count)
 		bt.MoveTime(t, move)
-		checkWait(counter)
+		checkWait(t, counter)
 	}
 
 	t.Log("serving beacons")
@@ -459,7 +453,7 @@ func TestBeaconSync(t *testing.T) {
 	// enable reception again of all nodes
 	bt.EnableReception(n - online)
 
-	// we advance the clock, all "resucitated nodes" will transmit a wrong
+	// we advance the clock, all "resuscitated nodes" will transmit a wrong
 	// beacon, but they will see the beacon they send is late w.r.t. the round
 	// they should be, so they will sync with the "safe online" nodes. They
 	// will get the latest beacon and then directly run the right round
@@ -477,10 +471,9 @@ func TestBeaconSimple(t *testing.T) {
 	period := 2 * time.Second
 
 	genesisTime := clock.NewFakeClock().Now().Unix() + 2
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch, beaconID)
-	defer bt.CleanUp()
 
 	verifier := chain.NewVerifier(sch)
 
@@ -524,11 +517,11 @@ func TestBeaconSimple(t *testing.T) {
 	bt.MoveTime(t, 1*time.Second)
 
 	// check 1 period
-	checkWait(counter)
+	checkWait(t, counter)
 	// check 2 period
 	counter.Add(n)
 	bt.MoveTime(t, period)
-	checkWait(counter)
+	checkWait(t, counter)
 }
 
 func TestBeaconThreshold(t *testing.T) {
@@ -538,18 +531,17 @@ func TestBeaconThreshold(t *testing.T) {
 
 	offsetGenesis := 2 * time.Second
 	genesisTime := clock.NewFakeClock().Now().Add(offsetGenesis).Unix()
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
 
 	bt := NewBeaconTest(t, n, thr, period, genesisTime, sch, beaconID)
-	defer func() { go bt.CleanUp() }()
 
 	verifier := chain.NewVerifier(sch)
 
 	currentRound := uint64(0)
-	var counter = &sync.WaitGroup{}
+	var counter sync.WaitGroup
 	myCallBack := func(i int) func(*chain.Beacon) {
 		return func(b *chain.Beacon) {
-			fmt.Printf(" - test: callback called for node %d - round %d\n", i, b.Round)
+			t.Logf(" - test: callback called for node %d - round %d\n", i, b.Round)
 			// verify partial sig
 
 			err := verifier.VerifyBeacon(*b, bt.dpublic)
@@ -569,7 +561,7 @@ func TestBeaconThreshold(t *testing.T) {
 				currentRound++
 				counter.Add(howMany)
 				bt.MoveTime(t, period)
-				checkWait(counter)
+				checkWait(t, &counter)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}()
@@ -588,7 +580,7 @@ func TestBeaconThreshold(t *testing.T) {
 	currentRound = 1
 	counter.Add(n - 1)
 	bt.MoveTime(t, offsetGenesis)
-	checkWait(counter)
+	checkWait(t, &counter)
 
 	// make a few rounds
 	makeRounds(nRounds, n-1)
@@ -606,22 +598,52 @@ func TestBeaconThreshold(t *testing.T) {
 	// and then run a few rounds
 	makeRounds(nRounds, n)
 
-	// stop last one again - so it will force a sync not from genesis
-	// bt.StopBeacon(n - 1)
-	// make a few round
-	// makeRounds(nRounds, n-1)
-
-	// start the node again
-	// bt.CreateNode(n - 1)
-	// bt.ServeBeacon(n - 1)
-	// bt.StartBeacon(n-1, true)
-	// bt.CallbackFor(n-1, myCallBack(n-1))
-	// let time for syncing
-	// time.Sleep(100 * time.Millisecond)
 	t.Log("move time with all nodes")
 
 	// expect lastnode to have catch up
 	makeRounds(nRounds, n)
+}
+
+func TestProcessingPartialBeaconWithNonExistentIndexDoesntSegfault(t *testing.T) {
+	bls, _ := scheme.GetSchemeByID(scheme.DefaultSchemeID)
+	bt := NewBeaconTest(t, 3, 2, 30*time.Second, 0, bls, "default")
+
+	packet := drand.PartialBeaconPacket{
+		Round:       1,
+		PreviousSig: []byte("deadbeef"),
+		PartialSig:  []byte("efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	}
+	_, err := bt.nodes[0].handler.ProcessPartialBeacon(context.Background(), &packet)
+	require.Error(t, err, "attempted to process beacon from node of index 25958, but it was not in the group file")
+}
+
+func TestSyncChainWithoutMetadata(t *testing.T) {
+	logger := log.NewLogger(nil, log.LogDebug).Named("BeaconTest")
+	expectedBeaconID := "someGreatBeacon"
+
+	require.Equal(
+		t,
+		beaconIDToSync(logger, TestSyncRequest{round: 1, metadata: nil}, "127.0.0.1"),
+		"default",
+	)
+	require.Equal(
+		t,
+		beaconIDToSync(logger, TestSyncRequest{round: 1, metadata: &pbCommon.Metadata{BeaconID: expectedBeaconID}}, "127.0.0.1"),
+		expectedBeaconID,
+	)
+}
+
+type TestSyncRequest struct {
+	round    uint64
+	metadata *pbCommon.Metadata
+}
+
+func (t TestSyncRequest) GetFromRound() uint64 {
+	return t.round
+}
+
+func (t TestSyncRequest) GetMetadata() *pbCommon.Metadata {
+	return t.metadata
 }
 
 func (b *BeaconTest) CallbackFor(i int, fn func(*chain.Beacon)) {

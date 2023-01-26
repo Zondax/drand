@@ -1,6 +1,8 @@
 package common
 
-import "os"
+import (
+	"errors"
+)
 
 // DefaultBeaconID is the value used when beacon id has an empty value. This
 // value should not be changed for backward-compatibility reasons
@@ -11,14 +13,12 @@ const DefaultBeaconID = "default"
 // backward-compatibility reasons
 const DefaultChainHash = "default"
 
-// MultiBeaconFolder
+// MultiBeaconFolder is the name of the folder where the multi-beacon data is stored
 const MultiBeaconFolder = "multibeacon"
 
-// GetBeaconIDFromEnv read beacon id from an environmental variable.
-// It is used for testing purpose.
-func GetBeaconIDFromEnv() string {
-	return os.Getenv("BEACON_ID")
-}
+// LogsToSkip is used to reduce log verbosity when doing bulk processes, issuing logs only every LogsToSkip steps
+// this is currently set so that when processing past beacons it will give a log every ~2 seconds
+const LogsToSkip = 300
 
 // IsDefaultBeaconID indicates if the beacon id received is the default one or not.
 // There is a direct relationship between an empty string and the reserved id "default".
@@ -41,3 +41,20 @@ func CompareBeaconIDs(id1, id2 string) bool {
 
 	return true
 }
+
+// GetCanonicalBeaconID returns the correct beacon id.
+func GetCanonicalBeaconID(id string) string {
+	if IsDefaultBeaconID(id) {
+		return DefaultBeaconID
+	}
+	return id
+}
+
+// ErrNotPartOfGroup indicates that this node is not part of the group for a specific beacon ID
+var ErrNotPartOfGroup = errors.New("this node is not part of the group")
+
+// ErrPeerNotFound indicates that a peer is not part of any group that this node knows of
+var ErrPeerNotFound = errors.New("peer not found")
+
+// ErrInvalidChainHash means there was an error or a mismatch with the chain hash
+var ErrInvalidChainHash = errors.New("incorrect chain hash")

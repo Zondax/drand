@@ -2,22 +2,19 @@ package net
 
 import (
 	ctx "context"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/drand/drand/common"
 	"github.com/drand/drand/log"
 	protoCommon "github.com/drand/drand/protobuf/common"
-
-	//nolint:stylecheck
-	"github.com/drand/drand/protobuf/drand"
-
-	//nolint:stylecheck
 	control "github.com/drand/drand/protobuf/drand"
-
-	"google.golang.org/grpc"
 )
 
 const grpcDefaultIPNetwork = "tcp"
@@ -29,15 +26,15 @@ type ControlListener struct {
 }
 
 // NewTCPGrpcControlListener registers the pairing between a ControlServer and a grpc server
-func NewTCPGrpcControlListener(s control.ControlServer, controlAddr string) ControlListener {
+func NewTCPGrpcControlListener(s control.ControlServer, controlAddr string) (ControlListener, error) {
 	lis, err := net.Listen(controlListenAddr(controlAddr))
 	if err != nil {
 		log.DefaultLogger().Errorw("", "grpc listener", "failure", "err", err)
-		return ControlListener{}
+		return ControlListener{}, err
 	}
 	grpcServer := grpc.NewServer()
 	control.RegisterControlServer(grpcServer, s)
-	return ControlListener{conns: grpcServer, lis: lis}
+	return ControlListener{conns: grpcServer, lis: lis}, nil
 }
 
 // Start the listener for the control commands
@@ -48,8 +45,22 @@ func (g *ControlListener) Start() {
 }
 
 // Stop the listener and connections
+// By default, the Stop call will try to terminate all connections nicely.
+// However, after a timeout, it will forcefully close all connections and terminate.
 func (g *ControlListener) Stop() {
-	g.conns.Stop()
+	stopped := make(chan struct{})
+	go func() {
+		g.conns.GracefulStop()
+		stopped <- struct{}{}
+	}()
+	select {
+	case <-stopped:
+	//nolint:gomnd // We want to forcefully terminate this in 5 seconds.
+	case <-time.After(5 * time.Second):
+		g.conns.Stop()
+	}
+
+	g.lis.Close()
 }
 
 // ControlClient is a struct that implement control.ControlClient and is used to
@@ -69,7 +80,7 @@ func NewControlClient(addr string) (*ControlClient, error) {
 		host = fmt.Sprintf("%s://%s", network, host)
 	}
 
-	conn, err := grpc.Dial(host, grpc.WithInsecure())
+	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.DefaultLogger().Errorw("", "control client", "connect failure", "err", err)
 		return nil, err
@@ -85,19 +96,22 @@ func NewControlClient(addr string) (*ControlClient, error) {
 }
 
 func (c *ControlClient) RemoteStatus(ct ctx.Context,
-	addresses []*drand.Address,
-	beaconID string) (map[string]*drand.StatusResponse, error) {
+	addresses []*control.Address,
+	beaconID string) (map[string]*control.StatusResponse, error) {
 	metadata := protoCommon.Metadata{
 		NodeVersion: c.version.ToProto(), BeaconID: beaconID,
 	}
 
-	packet := drand.RemoteStatusRequest{
+	packet := control.RemoteStatusRequest{
 		Metadata:  &metadata,
 		Addresses: addresses,
 	}
 
 	resp, err := c.client.RemoteStatus(ct, &packet)
-	return resp.GetStatuses(), err
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetStatuses(), nil
 }
 
 // Ping the drand daemon to check if it's up and running
@@ -108,13 +122,23 @@ func (c *ControlClient) Ping() error {
 	return err
 }
 
-// Reload
-func (c *ControlClient) ReloadBeacon(beaconID string) (*control.ReloadBeaconResponse, error) {
+// LoadBeacon
+func (c *ControlClient) LoadBeacon(beaconID string) (*control.LoadBeaconResponse, error) {
 	metadata := protoCommon.Metadata{
 		NodeVersion: c.version.ToProto(), BeaconID: beaconID,
 	}
 
-	resp, err := c.client.ReloadBeacon(ctx.Background(), &control.ReloadBeaconRequest{Metadata: &metadata})
+	resp, err := c.client.LoadBeacon(ctx.Background(), &control.LoadBeaconRequest{Metadata: &metadata})
+	return resp, err
+}
+
+// ListBeaconIDs
+func (c *ControlClient) ListBeaconIDs() (*control.ListBeaconIDsResponse, error) {
+	metadata := protoCommon.Metadata{
+		NodeVersion: c.version.ToProto(),
+	}
+
+	resp, err := c.client.ListBeaconIDs(ctx.Background(), &control.ListBeaconIDsRequest{Metadata: &metadata})
 	return resp, err
 }
 
@@ -285,30 +309,110 @@ func (c *ControlClient) Shutdown(beaconID string) (*control.ShutdownResponse, er
 	return c.client.Shutdown(ctx.Background(), &control.ShutdownRequest{Metadata: &metadata})
 }
 
-const progressFollowQueue = 100
+const progressSyncQueue = 100
 
-// StartFollowChain initates the client catching up on an existing chain it is not part of
+// StartCheckChain initiates the check chain process
+func (c *ControlClient) StartCheckChain(cc ctx.Context, hashStr string, nodes []string, tls bool,
+	upTo uint64, beaconID string) (outCh chan *control.SyncProgress, errCh chan error, e error) {
+	// we need to make sure the beaconID is set in the metadata
+	metadata := protoCommon.NewMetadata(c.version.ToProto())
+	if beaconID == "" {
+		metadata.BeaconID = common.DefaultBeaconID
+	} else {
+		metadata.BeaconID = beaconID
+	}
+
+	hash, err := hex.DecodeString(hashStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if hashStr != common.DefaultChainHash && hashStr != "" {
+		metadata.ChainHash = hash
+	}
+
+	log.DefaultLogger().Infow("Launching a check request", "tls", tls, "upTo", upTo, "hash", hash, "beaconID", beaconID)
+
+	if upTo == 0 {
+		return nil, nil, fmt.Errorf("upTo must be greater than 0")
+	}
+
+	log.DefaultLogger().Infow("Starting to check chain consistency", "chain-hash", hash, "up to", upTo, "beaconID", beaconID)
+
+	stream, err := c.client.StartCheckChain(cc, &control.StartSyncRequest{
+		Nodes:    nodes,
+		IsTls:    tls,
+		UpTo:     upTo,
+		Metadata: metadata,
+	})
+
+	if err != nil {
+		log.DefaultLogger().Errorw("Error while checking chain consistency", "err", err)
+		return nil, nil, err
+	}
+
+	outCh = make(chan *control.SyncProgress, progressSyncQueue)
+	errCh = make(chan error)
+	go func() {
+		defer func() {
+			close(outCh)
+			close(errCh)
+		}()
+
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			select {
+			case outCh <- resp:
+			case <-cc.Done():
+				return
+			}
+		}
+	}()
+	return outCh, errCh, nil
+}
+
+// StartFollowChain initiates the client catching up on an existing chain it is not part of
 func (c *ControlClient) StartFollowChain(cc ctx.Context,
-	hash string,
+	hashStr string,
 	nodes []string,
 	tls bool,
 	upTo uint64,
-	beaconID string) (outCh chan *control.FollowProgress,
+	beaconID string) (outCh chan *control.SyncProgress,
 	errCh chan error, e error) {
+	// we need to make sure the beaconID is set and also the chain hash to check integrity of the chain info
 	metadata := protoCommon.NewMetadata(c.version.ToProto())
-	metadata.BeaconID = beaconID
-
-	stream, err := c.client.StartFollowChain(cc, &control.StartFollowRequest{
-		InfoHash: hash,
+	if beaconID == "" {
+		metadata.BeaconID = common.DefaultBeaconID
+	} else {
+		metadata.BeaconID = beaconID
+	}
+	if hashStr == common.DefaultChainHash || hashStr == "" {
+		return nil, nil, fmt.Errorf("chain hash is not set properly, you cannot use the 'default' chain hash" +
+			" to validate the integrity of the chain info when following a chain")
+	}
+	hash, err := hex.DecodeString(hashStr)
+	if err != nil {
+		return nil, nil, err
+	}
+	metadata.ChainHash = hash
+	log.DefaultLogger().Infow("Launching a follow request", "nodes", nodes, "tls", tls, "upTo", upTo, "hash", hashStr, "beaconID", beaconID)
+	stream, err := c.client.StartFollowChain(cc, &control.StartSyncRequest{
 		Nodes:    nodes,
 		IsTls:    tls,
 		UpTo:     upTo,
 		Metadata: metadata,
 	})
 	if err != nil {
+		log.DefaultLogger().Errorw("Error while following chain", "err", err)
 		return nil, nil, err
 	}
-	outCh = make(chan *control.FollowProgress, progressFollowQueue)
+	outCh = make(chan *control.SyncProgress, progressSyncQueue)
+	// TODO: currently if the remote node terminates during the follow, it won't close the client side process
 	errCh = make(chan error, 1)
 	go func() {
 		for {

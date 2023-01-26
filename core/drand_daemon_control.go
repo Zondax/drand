@@ -3,11 +3,11 @@ package core
 import (
 	"context"
 	"fmt"
-
-	"github.com/drand/drand/key"
+	"time"
 
 	"github.com/drand/drand/common/scheme"
-
+	"github.com/drand/drand/key"
+	"github.com/drand/drand/metrics"
 	"github.com/drand/drand/protobuf/common"
 	"github.com/drand/drand/protobuf/drand"
 )
@@ -25,16 +25,16 @@ func (dd *DrandDaemon) InitDKG(c context.Context, in *drand.InitDKGPacket) (*dra
 	if err != nil {
 		store, isStoreLoaded := dd.initialStores[beaconID]
 		if !isStoreLoaded {
-			dd.log.Infow("", "beacon_id", beaconID, "init_dkg", "loading store from disk")
+			dd.log.Infow("", "init_dkg", "loading store from disk")
 
 			newStore := key.NewFileStore(dd.opts.ConfigFolderMB(), beaconID)
 			store = &newStore
 		}
 
-		dd.log.Infow("", "beacon_id", beaconID, "init_dkg", "instantiating a new beacon process")
+		dd.log.Infow("", "init_dkg", "instantiating a new beacon process")
 		bp, err = dd.InstantiateBeaconProcess(beaconID, *store)
 		if err != nil {
-			return nil, fmt.Errorf("something went wrong try to initiate DKG. err: %s", err)
+			return nil, fmt.Errorf("something went wrong try to initiate DKG. err: %w", err)
 		}
 	}
 
@@ -50,16 +50,23 @@ func (dd *DrandDaemon) InitReshare(ctx context.Context, in *drand.InitResharePac
 	}
 
 	bp, err := dd.getBeaconProcessByID(beaconID)
+	if bp == nil {
+		return nil, fmt.Errorf("beacon with ID %s could not be found - make sure you have passed the id flag or have a default beacon", beaconID)
+	}
+
 	if err != nil {
 		store, isStoreLoaded := dd.initialStores[beaconID]
 		if !isStoreLoaded {
-			dd.log.Infow("", "beacon_id", beaconID, "init_reshare", "loading store from disk")
+			dd.log.Infow("", "init_reshare", "loading store from disk")
 
 			newStore := key.NewFileStore(dd.opts.ConfigFolderMB(), beaconID)
 			store = &newStore
 		}
 
-		dd.log.Infow("", "beacon_id", beaconID, "init_reshare", "instantiating a new beacon process")
+		metrics.GroupSize.WithLabelValues(bp.getBeaconID()).Set(float64(in.Info.Nodes))
+		metrics.GroupThreshold.WithLabelValues(bp.getBeaconID()).Set(float64(in.Info.Threshold))
+
+		dd.log.Infow("", "init_reshare", "instantiating a new beacon process")
 		bp, err = dd.InstantiateBeaconProcess(beaconID, *store)
 		if err != nil {
 			return nil, fmt.Errorf("something went wrong try to initiate DKG")
@@ -150,18 +157,21 @@ func (dd *DrandDaemon) Shutdown(ctx context.Context, in *drand.ShutdownRequest) 
 			return nil, err
 		}
 
-		bp.Stop(ctx)
-
 		dd.RemoveBeaconHandler(beaconID, bp)
+
+		bp.Stop(ctx)
+		<-bp.WaitExit()
+
 		dd.RemoveBeaconProcess(beaconID, bp)
 	}
 
 	metadata := common.NewMetadata(dd.version.ToProto())
+	metadata.BeaconID = in.GetMetadata().GetBeaconID()
 	return &drand.ShutdownResponse{Metadata: metadata}, nil
 }
 
-// ReloadBeacon
-func (dd *DrandDaemon) ReloadBeacon(ctx context.Context, in *drand.ReloadBeaconRequest) (*drand.ReloadBeaconResponse, error) {
+// LoadBeacon tells the DrandDaemon to load a new beacon into the memory
+func (dd *DrandDaemon) LoadBeacon(ctx context.Context, in *drand.LoadBeaconRequest) (*drand.LoadBeaconResponse, error) {
 	beaconID, err := dd.readBeaconID(in.GetMetadata())
 	if err != nil {
 		return nil, err
@@ -172,13 +182,13 @@ func (dd *DrandDaemon) ReloadBeacon(ctx context.Context, in *drand.ReloadBeaconR
 		return nil, fmt.Errorf("beacon id [%s] is already running", beaconID)
 	}
 
-	_, err = dd.ReloadBeaconFromDisk(beaconID)
+	_, err = dd.LoadBeaconFromDisk(beaconID)
 	if err != nil {
 		return nil, err
 	}
 
 	metadata := common.NewMetadata(dd.version.ToProto())
-	return &drand.ReloadBeaconResponse{Metadata: metadata}, nil
+	return &drand.LoadBeaconResponse{Metadata: metadata}, nil
 }
 
 // BackupDatabase triggers a backup of the primary database.
@@ -191,7 +201,8 @@ func (dd *DrandDaemon) BackupDatabase(ctx context.Context, in *drand.BackupDBReq
 	return bp.BackupDatabase(ctx, in)
 }
 
-func (dd *DrandDaemon) StartFollowChain(in *drand.StartFollowRequest, stream drand.Control_StartFollowChainServer) error {
+func (dd *DrandDaemon) StartFollowChain(in *drand.StartSyncRequest, stream drand.Control_StartFollowChainServer) error {
+	dd.log.Debugw("StartFollowChain", "requested_chainhash", in.Metadata.ChainHash)
 	bp, err := dd.getBeaconProcessFromRequest(in.GetMetadata())
 	if err != nil {
 		return err
@@ -200,23 +211,93 @@ func (dd *DrandDaemon) StartFollowChain(in *drand.StartFollowRequest, stream dra
 	return bp.StartFollowChain(in, stream)
 }
 
+func (dd *DrandDaemon) StartCheckChain(in *drand.StartSyncRequest, stream drand.Control_StartCheckChainServer) error {
+	dd.log.Debugw("StartCheckChain", "requested_chainhash", in.Metadata.ChainHash)
+	bp, err := dd.getBeaconProcessFromRequest(in.GetMetadata())
+	if err != nil {
+		return err
+	}
+
+	return bp.StartCheckChain(in, stream)
+}
+
+func (dd *DrandDaemon) ListBeaconIDs(ctx context.Context, in *drand.ListBeaconIDsRequest) (*drand.ListBeaconIDsResponse, error) {
+	metadata := common.NewMetadata(dd.version.ToProto())
+
+	dd.state.Lock()
+	defer dd.state.Unlock()
+
+	ids := make([]string, 0)
+	for id := range dd.beaconProcesses {
+		ids = append(ids, id)
+	}
+
+	return &drand.ListBeaconIDsResponse{Ids: ids, Metadata: metadata}, nil
+}
+
 // /////////
 
 // Stop simply stops all drand operations.
 func (dd *DrandDaemon) Stop(ctx context.Context) {
+	dd.log.Debugw("dd.Stop called")
+	select {
+	case <-dd.exitCh:
+		dd.log.Errorw("Trying to stop an already stopping daemon")
+		return
+	default:
+		dd.log.Infow("Stopping DrandDaemon")
+	}
 	for _, bp := range dd.beaconProcesses {
-		bp.StopBeacon()
+		dd.log.Debugw("Sending Stop to beaconProcesses", "id", bp.getBeaconID())
+		bp.Stop(ctx)
 	}
 
-	dd.state.Lock()
+	for _, bp := range dd.beaconProcesses {
+		dd.log.Debugw("waiting for beaconProcess to finish", "id", bp.getBeaconID())
+
+		//nolint:gomnd // We want to wait for 5 seconds before sending a timeout for the beacon shutdown
+		t := time.NewTimer(5 * time.Second)
+		select {
+		case <-bp.WaitExit():
+			if !t.Stop() {
+				<-t.C
+			}
+		case <-t.C:
+			dd.log.Errorw("beacon process failed to terminate in 5 seconds, exiting forcefully", "id", bp.getBeaconID())
+		}
+	}
+
+	dd.log.Debugw("all beacons exited successfully")
+
 	if dd.pubGateway != nil {
 		dd.pubGateway.StopAll(ctx)
+		dd.log.Debugw("pubGateway stopped successfully")
 	}
 	dd.privGateway.StopAll(ctx)
-	dd.control.Stop()
-	dd.state.Unlock()
+	dd.log.Debugw("privGateway stopped successfully")
+	// we defer the stop of the ControlListener to avoid canceling our context already
+	defer func() {
+		// We launch this in a goroutine to allow the stop connection to exit successfully.
+		// If we wouldn't launch it in a goroutine the Stop call itself would block the shutdown
+		// procedure and we'd be in a loop.
+		// By default, the Stop call will try to terminate all connections nicely.
+		// However, after a timeout, it will forcefully close all connections and terminate.
+		go func() {
+			dd.control.Stop()
+			dd.log.Debugw("control stopped successfully")
+		}()
+	}()
 
-	dd.exitCh <- true
+	dd.log.Debugw("waiting for dd.exitCh to finish")
+
+	select {
+	case dd.exitCh <- true:
+		dd.log.Debugw("signaled dd.exitCh")
+		close(dd.exitCh)
+	case <-ctx.Done():
+		dd.log.Warnw("Context canceled, DrandDaemon exitCh probably blocked")
+		close(dd.exitCh)
+	}
 }
 
 // WaitExit returns a channel that signals when drand stops its operations

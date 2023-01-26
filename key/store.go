@@ -6,9 +6,9 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/drand/drand/common"
-
 	"github.com/BurntSushi/toml"
+
+	"github.com/drand/drand/common"
 	"github.com/drand/drand/fs"
 )
 
@@ -50,7 +50,7 @@ type Tomler interface {
 	TOMLValue() interface{}
 }
 
-// fileStore is a Store using filesystem to store informations
+// fileStore is a Store using filesystem to store information
 type fileStore struct {
 	baseFolder     string
 	beaconID       string
@@ -92,11 +92,9 @@ func NewFileStores(baseFolder string) (map[string]Store, error) {
 }
 
 // NewFileStore is used to create the config folder and all the subfolders.
-// If a folder alredy exists, we simply check the rights
+// If a folder already exists, we simply check the rights
 func NewFileStore(baseFolder, beaconID string) Store {
-	if beaconID == "" {
-		beaconID = common.DefaultBeaconID
-	}
+	beaconID = common.GetCanonicalBeaconID(beaconID)
 
 	store := &fileStore{baseFolder: baseFolder, beaconID: beaconID}
 
@@ -118,7 +116,7 @@ func (f *fileStore) SaveKeyPair(p *Pair) error {
 	if err := Save(f.privateKeyFile, p, true); err != nil {
 		return err
 	}
-	fmt.Printf("Saved the key : %s at %s\n", p.Public.Addr, f.publicKeyFile)
+	fmt.Printf("Saved the key : %s at %s\n", p.Public.Addr, f.publicKeyFile) //nolint
 	return Save(f.publicKeyFile, p.Public, false)
 }
 
@@ -141,7 +139,7 @@ func (f *fileStore) SaveGroup(g *Group) error {
 }
 
 func (f *fileStore) SaveShare(share *Share) error {
-	fmt.Printf("crypto store: saving private share in %s\n", f.shareFile)
+	fmt.Printf("crypto store: saving private share in %s\n", f.shareFile) //nolint
 	return Save(f.shareFile, share, true)
 }
 
@@ -152,14 +150,14 @@ func (f *fileStore) LoadShare() (*Share, error) {
 
 func (f *fileStore) Reset(...ResetOption) error {
 	if err := Delete(f.distKeyFile); err != nil {
-		return fmt.Errorf("drand: err deleting dist. key file: %v", err)
+		return fmt.Errorf("drand: err deleting dist. key file: %w", err)
 	}
 	if err := Delete(f.shareFile); err != nil {
-		return fmt.Errorf("drand: errd eleting share file: %v", err)
+		return fmt.Errorf("drand: err deleting share file: %w", err)
 	}
 
 	if err := Delete(f.groupFile); err != nil {
-		return fmt.Errorf("drand: err deleting group file: %v", err)
+		return fmt.Errorf("drand: err deleting group file: %w", err)
 	}
 	return nil
 }
@@ -176,7 +174,7 @@ func Save(filePath string, t Tomler, secure bool) error {
 		fd, err = os.Create(filePath)
 	}
 	if err != nil {
-		return fmt.Errorf("config: can't save %s to %s: %s", reflect.TypeOf(t).String(), filePath, err)
+		return fmt.Errorf("config: can't save %s to %s: %w", reflect.TypeOf(t).String(), filePath, err)
 	}
 	defer fd.Close()
 	return toml.NewEncoder(fd).Encode(t.TOML())

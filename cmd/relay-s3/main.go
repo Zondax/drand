@@ -10,16 +10,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	json "github.com/nikkolasg/hexjson"
+	"github.com/urfave/cli/v2"
+
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/cmd/client/lib"
 	"github.com/drand/drand/common"
 	"github.com/drand/drand/log"
-	json "github.com/nikkolasg/hexjson"
-	cli "github.com/urfave/cli/v2"
 )
 
 // Automatically set through -ldflags
-// Example: go install -ldflags "-X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`"
+// Example: go install -ldflags "-X main.buildDate=$(date -u +%d/%m/%Y@%H:%M:%S) -X main.gitCommit=$(git rev-parse HEAD)"
 var (
 	gitCommit = "none"
 	buildDate = "unknown"
@@ -30,10 +31,12 @@ var (
 		Name:     "bucket",
 		Usage:    "Name of the AWS bucket to upload to",
 		Required: true,
+		EnvVars:  []string{"DRAND_S3RELAY_BUCKET"},
 	}
 	regionFlag = &cli.StringFlag{
-		Name:  "region",
-		Usage: "Name of the AWS region to use (optional)",
+		Name:    "region",
+		Usage:   "Name of the AWS region to use (optional)",
+		EnvVars: []string{"DRAND_S3RELAY_REGION"},
 	}
 )
 
@@ -46,6 +49,10 @@ func main() {
 		Usage:    "AWS S3 relay for randomness beacon",
 		Commands: []*cli.Command{runCmd, syncCmd},
 	}
+
+	// See https://cli.urfave.org/v2/examples/bash-completions/#enabling for how to turn on.
+	app.EnableBashCompletion = true
+
 	cli.VersionPrinter = func(c *cli.Context) {
 		fmt.Printf("drand AWS S3 relay %s (date %v, commit %v)\n", version, buildDate, gitCommit)
 	}

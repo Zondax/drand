@@ -1,42 +1,35 @@
 name: "Publish tagged image"
 
 on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
   release:
     types:
       - created
     tags:
-      - "v[0-9]+(\\.[0-9]+)*"
+      - 'v*'
 
 jobs:
   tagged-deploy:
+    environment: dockerhub
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f # pin@v2
-      - uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57 # pin@v2
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3.3.0
+      - uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # pin@v3.5.0
         with:
-          go-version: '^1.17'
-      - uses: actions/cache@c64c572235d810460d0d6876e9c705ad5002b353 # pin@v2
+          go-version: '1.19.5'
+      - uses: actions/cache@58c146cc91c5b9e778e71775dfe9bf1442ad9a12 # pin@v3.2.3
         id: cache
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Get latest release version number
-        id: get_version
-        uses: battila7/get-version-action@d97fbc34ceb64d1f5d95f4dfd6dce33521ccccf5 # pin@v2
-      - name: Parse semver string
-        id: semver_parser
-        uses: booxmedialtd/ws-action-parse-semver@3576f3a20a39f8752fe0d8195f5ed384090285dc # pin@v1
-        with:
-          input_string: ${{ steps.get_version.outputs.version }}
-          version_extractor_regex: 'v(.*)$'
       - name: Build and push tagged Docker image
         run: |
-          docker build --build-arg major=${{ steps.semver_parser.outputs.major }} --build-arg minor=${{ steps.semver_parser.outputs.minor }} --build-arg patch=${{ steps.semver_parser.outputs.patch }} --build-arg gitCommit=`git rev-parse HEAD` -t drandorg/go-drand:`git describe --tags` .
-          echo $DOCKER_PWD | docker login -u $DOCKER_LOGIN --password-stdin
+          docker build --build-arg gitCommit=`git rev-parse HEAD` -t drandorg/go-drand:`git describe --tags` .
+          echo ${{ secrets.DOCKER_HUB_TOKEN }} | docker login -u drandci --password-stdin
           docker push drandorg/go-drand:`git describe --tags`
-        env:
-          DOCKER_PWD: ${{ secrets.DOCKER_PWD }}
-          DOCKER_LOGIN: ${{ secrets.DOCKER_LOGIN }}

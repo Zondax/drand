@@ -11,14 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/drand/drand/chain"
-	"github.com/drand/drand/client"
-	"github.com/drand/drand/log"
-	"github.com/drand/drand/metrics"
+	json "github.com/nikkolasg/hexjson"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	json "github.com/nikkolasg/hexjson"
+	"github.com/drand/drand/chain"
+	"github.com/drand/drand/client"
+	"github.com/drand/drand/common"
+	"github.com/drand/drand/log"
+	"github.com/drand/drand/metrics"
 )
 
 var errClientClosed = fmt.Errorf("client closed")
@@ -92,7 +93,7 @@ func NewWithInfo(url string, info *chain.Info, transport nhttp.RoundTripper) (cl
 func ForURLs(urls []string, chainHash []byte) []client.Client {
 	clients := make([]client.Client, 0)
 	var info *chain.Info
-	skipped := []string{}
+	var skipped []string
 	for _, u := range urls {
 		if info == nil {
 			if c, err := New(u, chainHash, nil); err == nil {
@@ -122,10 +123,10 @@ func ForURLs(urls []string, chainHash []byte) []client.Client {
 func Ping(ctx context.Context, root string) error {
 	url := fmt.Sprintf("%s/health", root)
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(ctx, maxTimeoutHTTPRequest)
 	defer cancel()
 
-	req, err := nhttp.NewRequestWithContext(ctx, "GET", url, nhttp.NoBody)
+	req, err := nhttp.NewRequestWithContext(ctx, nhttp.MethodGet, url, nhttp.NoBody)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
@@ -174,14 +175,11 @@ func instrumentClient(url string, transport nhttp.RoundTripper) *nhttp.Client {
 	return &hc
 }
 
-func IsServerReady(addr string) error {
+func IsServerReady(addr string) (er error) {
 	counter := 0
-
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), maxTimeoutHTTPRequest)
-		defer cancel()
-
-		err := Ping(ctx, "http://"+addr)
+		// Ping is wrapping its context with a Timeout on maxTimeoutHTTPRequest anyway.
+		err := Ping(context.Background(), "http://"+addr)
 		if err == nil {
 			return nil
 		}
@@ -243,14 +241,14 @@ func (h *httpClient) FetchChainInfo(ctx context.Context, chainHash []byte) (*cha
 	defer cancel()
 
 	go func() {
-		url := ""
+		var url string
 		if len(chainHash) > 0 {
 			url = fmt.Sprintf("%s%x/info", h.root, chainHash)
 		} else {
 			url = fmt.Sprintf("%sinfo", h.root)
 		}
 
-		req, err := nhttp.NewRequestWithContext(ctx, "GET", url, nhttp.NoBody)
+		req, err := nhttp.NewRequestWithContext(ctx, nhttp.MethodGet, url, nhttp.NoBody)
 		if err != nil {
 			resC <- httpInfoResponse{nil, fmt.Errorf("creating request: %w", err)}
 			return
@@ -275,10 +273,14 @@ func (h *httpClient) FetchChainInfo(ctx context.Context, chainHash []byte) (*cha
 			return
 		}
 
-		if chainHash == nil {
+		if len(chainHash) == 0 {
 			h.l.Warnw("", "http_client", "instantiated without trustroot", "chainHash", hex.EncodeToString(chainInfo.Hash()))
-		}
-		if chainHash != nil && !bytes.Equal(chainInfo.Hash(), chainHash) {
+			if !common.IsDefaultBeaconID(chainInfo.ID) {
+				err := fmt.Errorf("%s does not advertise the default drand for the default chainHash (got %x)", h.root, chainInfo.Hash())
+				resC <- httpInfoResponse{nil, err}
+				return
+			}
+		} else if !bytes.Equal(chainInfo.Hash(), chainHash) {
 			err := fmt.Errorf("%s does not advertise the expected drand group (%x vs %x)", h.root, chainInfo.Hash(), chainHash)
 			resC <- httpInfoResponse{nil, err}
 			return
@@ -316,7 +318,7 @@ func (h *httpClient) Get(ctx context.Context, round uint64) (client.Result, erro
 	defer cancel()
 
 	go func() {
-		req, err := nhttp.NewRequestWithContext(ctx, "GET", url, nhttp.NoBody)
+		req, err := nhttp.NewRequestWithContext(ctx, nhttp.MethodGet, url, nhttp.NoBody)
 		if err != nil {
 			resC <- httpGetResponse{nil, fmt.Errorf("creating request: %w", err)}
 			return
@@ -335,8 +337,9 @@ func (h *httpClient) Get(ctx context.Context, round uint64) (client.Result, erro
 			resC <- httpGetResponse{nil, fmt.Errorf("decoding response: %w", err)}
 			return
 		}
-		if len(randResp.Sig) == 0 || len(randResp.PreviousSignature) == 0 {
-			resC <- httpGetResponse{nil, fmt.Errorf("insufficient response")}
+
+		if len(randResp.Sig) == 0 {
+			resC <- httpGetResponse{nil, fmt.Errorf("insufficient response - signature is not present")}
 			return
 		}
 

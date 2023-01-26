@@ -3,13 +3,14 @@ package beacon
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
 	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/kyber/share"
-	"github.com/stretchr/testify/require"
 )
 
 var fakeKey = key.NewKeyPair("127.0.0.1:8080")
@@ -60,7 +61,7 @@ func TestCacheRound(t *testing.T) {
 
 func TestCachePartial(t *testing.T) {
 	l := log.DefaultLogger()
-	cache := newPartialCache(l, "test_id")
+	cache := newPartialCache(l)
 	var round uint64 = 64
 	prev := []byte("yesterday was another day")
 

@@ -7,23 +7,21 @@ import (
 	"sync"
 
 	"github.com/drand/drand/chain"
-	"github.com/drand/drand/metrics"
-	"github.com/drand/drand/metrics/pprof"
-	"github.com/drand/drand/protobuf/drand"
-
 	"github.com/drand/drand/common"
 	dhttp "github.com/drand/drand/http"
-
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
-
+	"github.com/drand/drand/metrics"
+	"github.com/drand/drand/metrics/pprof"
 	"github.com/drand/drand/net"
+	"github.com/drand/drand/protobuf/drand"
 )
 
 type DrandDaemon struct {
 	initialStores   map[string]*key.Store
 	beaconProcesses map[string]*BeaconProcess
-	chainHashes     map[string]string
+	// hex encoded chainHash mapping to beaconID
+	chainHashes map[string]string
 
 	privGateway *net.PrivateGateway
 	pubGateway  *net.PublicGateway
@@ -59,19 +57,15 @@ func NewDrandDaemon(c *Config) (*DrandDaemon, error) {
 		chainHashes:     make(map[string]string),
 	}
 
-	// Add callback to registera new handler for http server after finishing DKG successfully
+	// Add callback to register a new handler for http server after finishing DKG successfully
 	c.dkgCallback = func(share *key.Share, group *key.Group) {
-		beaconID := group.ID
-		if beaconID == "" {
-			beaconID = common.DefaultBeaconID
-		}
+		beaconID := common.GetCanonicalBeaconID(group.ID)
 
 		drandDaemon.state.Lock()
 		bp, isPresent := drandDaemon.beaconProcesses[beaconID]
 		drandDaemon.state.Unlock()
 
 		if isPresent {
-			drandDaemon.AddNewChainHash(beaconID, bp)
 			drandDaemon.AddBeaconHandler(beaconID, bp)
 		}
 	}
@@ -79,6 +73,8 @@ func NewDrandDaemon(c *Config) (*DrandDaemon, error) {
 	if err := drandDaemon.init(); err != nil {
 		return nil, err
 	}
+
+	metrics.DrandStorageBackend.Set(float64(chain.MetricsStorageType(c.dbStorageEngine)))
 
 	return drandDaemon, nil
 }
@@ -109,6 +105,9 @@ func (dd *DrandDaemon) init() error {
 		return fmt.Errorf("private listen address cannot be empty")
 	}
 
+	// we set our logger name to its node address
+	dd.log = dd.log.Named(privAddr)
+
 	// ctx is used to create the gateway below.
 	// Gateway constructors (specifically, the generated gateway stubs that require it)
 	// do not actually use it, so we are passing a background context to be safe.
@@ -117,7 +116,7 @@ func (dd *DrandDaemon) init() error {
 	var err error
 	dd.log.Infow("", "network", "init", "insecure", c.insecure)
 
-	handler, err := dhttp.New(ctx, &drandProxy{dd}, c.Version(), dd.log.With("server", "http"))
+	handler, err := dhttp.New(ctx, c.Version(), dd.log.With("server", "http"))
 	if err != nil {
 		return err
 	}
@@ -136,10 +135,18 @@ func (dd *DrandDaemon) init() error {
 	}
 
 	p := c.ControlPort()
-	dd.control = net.NewTCPGrpcControlListener(dd, p)
+	dd.control, err = net.NewTCPGrpcControlListener(dd, p)
+
+	if err != nil {
+		return err
+	}
 	go dd.control.Start()
 
-	dd.log.Infow("", "private_listen", privAddr, "control_port", c.ControlPort(), "public_listen", pubAddr, "folder", c.ConfigFolderMB())
+	dd.log.Infow("DrandDaemon initialized",
+		"private_listen", privAddr,
+		"control_port", c.ControlPort(),
+		"public_listen", pubAddr,
+		"folder", c.ConfigFolderMB())
 	dd.privGateway.StartAll()
 	if dd.pubGateway != nil {
 		dd.pubGateway.StartAll()
@@ -150,11 +157,10 @@ func (dd *DrandDaemon) init() error {
 
 // InstantiateBeaconProcess creates a new BeaconProcess linked to beacon with id 'beaconID'
 func (dd *DrandDaemon) InstantiateBeaconProcess(beaconID string, store key.Store) (*BeaconProcess, error) {
-	if beaconID == "" {
-		beaconID = common.DefaultBeaconID
-	}
-
-	bp, err := NewBeaconProcess(dd.log, store, dd.opts, dd.privGateway, dd.pubGateway)
+	beaconID = common.GetCanonicalBeaconID(beaconID)
+	// we add the BeaconID to our logger's name. Notice the BeaconID never changes.
+	logger := dd.log.Named(beaconID)
+	bp, err := NewBeaconProcess(logger, store, beaconID, dd.opts, dd.privGateway, dd.pubGateway)
 	if err != nil {
 		return nil, err
 	}
@@ -163,24 +169,22 @@ func (dd *DrandDaemon) InstantiateBeaconProcess(beaconID string, store key.Store
 	dd.beaconProcesses[beaconID] = bp
 	dd.state.Unlock()
 
-	return bp, nil
-}
-
-func (dd *DrandDaemon) AddNewChainHash(beaconID string, bp *BeaconProcess) {
-	dd.state.Lock()
-	chainHash := chain.NewChainInfo(bp.group).HashString()
-	dd.chainHashes[chainHash] = beaconID
-	if common.IsDefaultBeaconID(beaconID) {
-		dd.chainHashes[common.DefaultChainHash] = beaconID
+	// Todo: investigate if this is ever true at this point
+	if bp.dkgDone {
+		metrics.DKGStateChange(metrics.DKGDone, beaconID, false)
+	} else {
+		metrics.DKGStateChange(metrics.DKGNotStarted, beaconID, false)
 	}
-	dd.state.Unlock()
+	metrics.ReshareStateChange(metrics.ReshareIdle, beaconID, false)
+	metrics.IsDrandNode.Set(1)
+	metrics.DrandStartTimestamp.SetToCurrentTime()
+
+	return bp, nil
 }
 
 // RemoveBeaconProcess remove a BeaconProcess linked to beacon with id 'beaconID'
 func (dd *DrandDaemon) RemoveBeaconProcess(beaconID string, bp *BeaconProcess) {
-	if beaconID == "" {
-		beaconID = common.DefaultBeaconID
-	}
+	beaconID = common.GetCanonicalBeaconID(beaconID)
 
 	chainHash := ""
 	if bp.group != nil {
@@ -196,65 +200,110 @@ func (dd *DrandDaemon) RemoveBeaconProcess(beaconID string, bp *BeaconProcess) {
 		delete(dd.chainHashes, common.DefaultChainHash)
 	}
 
+	dd.log.Debugw("BeaconProcess removed", "beacon_id", beaconID, "chain_hash", chainHash)
+
+	metrics.DKGStateChange(metrics.DKGShutdown, beaconID, false)
+	metrics.ReshareStateChange(metrics.ReshareShutdown, beaconID, false)
+	metrics.IsDrandNode.Set(1)
+	metrics.DrandStartTimestamp.SetToCurrentTime()
+
 	dd.state.Unlock()
 }
 
 // AddBeaconHandler adds a handler linked to beacon with chain hash from http server used to
 // expose public services
 func (dd *DrandDaemon) AddBeaconHandler(beaconID string, bp *BeaconProcess) {
-	info := chain.NewChainInfo(bp.group)
+	chainHash := chain.NewChainInfo(bp.group).HashString()
 
-	bh := dd.handler.RegisterNewBeaconHandler(&drandProxy{bp}, info.HashString())
+	bh := dd.handler.RegisterNewBeaconHandler(&drandProxy{bp}, chainHash)
+
+	dd.state.Lock()
+	dd.chainHashes[chainHash] = beaconID
+	dd.state.Unlock()
+
 	if common.IsDefaultBeaconID(beaconID) {
 		dd.handler.RegisterDefaultBeaconHandler(bh)
+
+		dd.state.Lock()
+		dd.chainHashes[common.DefaultChainHash] = beaconID
+		dd.state.Unlock()
 	}
 }
 
 // RemoveBeaconHandler removes a handler linked to beacon with chain hash from http server used to
 // expose public services
 func (dd *DrandDaemon) RemoveBeaconHandler(beaconID string, bp *BeaconProcess) {
-	if bp.group != nil {
-		info := chain.NewChainInfo(bp.group)
-		dd.handler.RemoveBeaconHandler(info.HashString())
-		if common.IsDefaultBeaconID(beaconID) {
-			dd.handler.RemoveBeaconHandler(common.DefaultChainHash)
-		}
+	if bp.group == nil {
+		return
+	}
+
+	info := chain.NewChainInfo(bp.group)
+	dd.handler.RemoveBeaconHandler(info.HashString())
+	if common.IsDefaultBeaconID(beaconID) {
+		dd.handler.RemoveBeaconHandler(common.DefaultChainHash)
 	}
 }
 
-// LoadBeacons checks for existing stores and creates the corresponding BeaconProcess
-// accordingly to each stored BeaconID
-func (dd *DrandDaemon) LoadBeacons(metricsFlag string) error {
+// LoadBeaconsFromDisk checks for existing stores and creates the corresponding BeaconProcess
+// accordingly to each stored BeaconID.
+// When singleBeacon is set, and the singleBeaconName matches one of the stored beacons, then
+// only that beacon will be loaded.
+// If the singleBeaconName is an empty string, no beacon will be loaded.
+func (dd *DrandDaemon) LoadBeaconsFromDisk(metricsFlag string, singleBeacon bool, singleBeaconName string) error {
+	// Are we trying to start the daemon without any beacon running?
+	if singleBeacon && singleBeaconName == "" {
+		dd.log.Warnw("starting daemon with no active beacon")
+		return nil
+	}
+
 	// Load possible existing stores
 	stores, err := key.NewFileStores(dd.opts.ConfigFolderMB())
 	if err != nil {
 		return err
 	}
 
+	metricsHandlers := make([]metrics.Handler, 0, len(stores))
+
+	startedAtLeastOne := false
 	for beaconID, fs := range stores {
-		bp, err := dd.LoadBeacon(beaconID, fs)
+		if singleBeacon && singleBeaconName != beaconID {
+			continue
+		}
+
+		bp, err := dd.LoadBeaconFromStore(beaconID, fs)
 		if err != nil {
 			return err
 		}
 
-		// Start metrics server
 		if metricsFlag != "" {
-			_ = metrics.Start(metricsFlag, pprof.WithProfile(), bp.PeerMetrics)
+			bp.log.Infow("", "metrics", "adding handler")
+			metricsHandlers = append(metricsHandlers, bp.MetricsHandlerForPeer)
 		}
+
+		startedAtLeastOne = true
+	}
+
+	if !startedAtLeastOne {
+		dd.log.Warnw("starting daemon with no active beacon")
+	}
+
+	// Start metrics server
+	if len(metricsHandlers) > 0 {
+		_ = metrics.Start(metricsFlag, pprof.WithProfile(), metricsHandlers)
 	}
 
 	return nil
 }
 
-func (dd *DrandDaemon) ReloadBeaconFromDisk(beaconID string) (*BeaconProcess, error) {
+func (dd *DrandDaemon) LoadBeaconFromDisk(beaconID string) (*BeaconProcess, error) {
 	store := key.NewFileStore(dd.opts.ConfigFolderMB(), beaconID)
-	return dd.LoadBeacon(beaconID, store)
+	return dd.LoadBeaconFromStore(beaconID, store)
 }
 
-func (dd *DrandDaemon) LoadBeacon(beaconID string, store key.Store) (*BeaconProcess, error) {
+func (dd *DrandDaemon) LoadBeaconFromStore(beaconID string, store key.Store) (*BeaconProcess, error) {
 	bp, err := dd.InstantiateBeaconProcess(beaconID, store)
 	if err != nil {
-		fmt.Printf("beacon id [%s]: can't instantiate randomness beacon. err: %s \n", beaconID, err)
+		dd.log.Errorw("beacon id", beaconID, "can't instantiate randomness beacon. err:", err)
 		return nil, err
 	}
 
@@ -264,20 +313,19 @@ func (dd *DrandDaemon) LoadBeacon(beaconID string, store key.Store) (*BeaconProc
 	}
 
 	if freshRun {
-		fmt.Printf("beacon id [%s]: will run as fresh install -> expect to run DKG.\n", beaconID)
+		dd.log.Infow(fmt.Sprintf("beacon id [%s]: will run as fresh install -> expect to run DKG.", beaconID))
 	} else {
-		fmt.Printf("beacon id [%s]: will start running randomness beacon.\n", beaconID)
+		dd.log.Infow(fmt.Sprintf("beacon id [%s]: will start running randomness beacon.", beaconID))
 
-		// Add beacon chain hash as a new valid one
-		dd.AddNewChainHash(beaconID, bp)
-
-		// Add beacon handler from chain has for http server
+		// Add beacon handler for http server
 		dd.AddBeaconHandler(beaconID, bp)
 
 		// XXX make it configurable so that new share holder can still start if
 		// nobody started.
 		// drand.StartBeacon(!c.Bool(pushFlag.Name))
 		catchup := true
+		// TODO (dlsniper): This error should be propagated
+		//nolint:errcheck // This should be handled, see the above comment
 		bp.StartBeacon(catchup)
 	}
 

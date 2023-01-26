@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"net"
 
-	kyber "github.com/drand/kyber"
-	"github.com/drand/kyber/share"
-	dkg "github.com/drand/kyber/share/dkg"
-	"github.com/drand/kyber/util/random"
-
 	proto "github.com/drand/drand/protobuf/drand"
+	"github.com/drand/kyber"
+	"github.com/drand/kyber/share"
+	"github.com/drand/kyber/share/dkg"
+	"github.com/drand/kyber/util/random"
 )
 
 // Pair is a wrapper around a random scalar  and the corresponding public
@@ -155,7 +154,7 @@ func (i *Identity) FromTOML(t interface{}) error {
 	var err error
 	i.Key, err = StringToPoint(KeyGroup, ptoml.Key)
 	if err != nil {
-		return fmt.Errorf("decoding public key: %s", err)
+		return fmt.Errorf("decoding public key: %w", err)
 	}
 	i.Addr = ptoml.Address
 	i.TLS = ptoml.TLS
@@ -273,14 +272,14 @@ func (s *Share) FromTOML(i interface{}) error {
 	for i, c := range t.Commits {
 		p, err := StringToPoint(KeyGroup, c)
 		if err != nil {
-			return fmt.Errorf("share.Commit[%d] corruputed: %s", i, err)
+			return fmt.Errorf("share.Commit[%d] corruputed: %w", i, err)
 		}
 		s.Commits[i] = p
 	}
 
 	sshare, err := StringToScalar(KeyGroup, t.Share)
 	if err != nil {
-		return fmt.Errorf("share.Share corrupted: %s", err)
+		return fmt.Errorf("share.Share corrupted: %w", err)
 	}
 	s.Share = &share.PriShare{V: sshare, I: t.Index}
 	return nil

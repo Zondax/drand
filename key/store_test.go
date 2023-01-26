@@ -5,23 +5,20 @@ import (
 	"path"
 	"testing"
 
-	"github.com/drand/drand/common"
-
-	kyber "github.com/drand/kyber"
-	"github.com/drand/kyber/share"
 	"github.com/stretchr/testify/require"
+
+	commonutils "github.com/drand/drand/common"
+	"github.com/drand/kyber"
+	"github.com/drand/kyber/share"
 )
 
 func TestKeysSaveLoad(t *testing.T) {
 	n := 4
 	ps, group := BatchIdentities(n)
-	beaconID := common.GetBeaconIDFromEnv()
+	// we don't use the function from the test package here to avoid a circular dependency
+	beaconID := commonutils.GetCanonicalBeaconID(os.Getenv("BEACON_ID"))
 
-	tmp := os.TempDir()
-	tmp = path.Join(tmp, "drand-key")
-
-	os.RemoveAll(tmp)
-	defer os.RemoveAll(tmp)
+	tmp := path.Join(t.TempDir(), "drand-key")
 
 	store := NewFileStore(tmp, beaconID).(*fileStore)
 	require.Equal(t, tmp, store.baseFolder)

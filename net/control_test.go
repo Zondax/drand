@@ -1,7 +1,6 @@
 package net
 
 import (
-	"os"
 	"runtime"
 	"testing"
 
@@ -28,13 +27,14 @@ func TestControlUnix(t *testing.T) {
 		t.Skip("Platform does not support unix.")
 	}
 
-	name, err := os.MkdirTemp("", "unixtxt")
+	name := t.TempDir()
+	s := testnet.EmptyServer{}
+	service, err := NewTCPGrpcControlListener(&s, "unix://"+name+"/sock")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(name)
-	s := testnet.EmptyServer{}
-	service := NewTCPGrpcControlListener(&s, "unix://"+name+"/sock")
+
 	client, err := NewControlClient("unix://" + name + "/sock")
 
 	if err != nil {

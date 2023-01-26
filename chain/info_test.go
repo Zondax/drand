@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/test"
-	"github.com/stretchr/testify/require"
 )
 
 func TestChainInfo(t *testing.T) {
@@ -31,7 +32,7 @@ func TestChainInfo(t *testing.T) {
 
 	c12 := NewChainInfo(fake)
 	// Note: the fake group here does not hash the same.
-	c12.GroupHash = c1.GroupHash
+	c12.GenesisSeed = c1.GenesisSeed
 	h12 := c12.Hash()
 	require.Equal(t, h1, h12)
 	require.Equal(t, c1, c12)

@@ -11,25 +11,26 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
-    - uses: actions/cache@v2
+      uses: actions/checkout@v3.3.0
+    - uses: actions/cache@v3.2.3
       id: generate-dep-cache
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3.5.0
       with:
-        go-version: '^1.17'
+        go-version: '1.19.5'
     - name: Fetch Dependencies
       run: go get ./...
     - name: Install Protoc
-      uses: arduino/setup-protoc@v1.1.2
+      uses: arduino/setup-protoc@ab6203da1c3118e4406048171b09238ad31ad73e # pin@latest-16.02.2023
       with:
-        version: '3.17.x'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        version: '3.19.6'
     - name: Install Protoc-gen-go
       run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1 
-        go get google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1.0
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
     - name: Generate
       run: go generate ./...&& go mod tidy
     - name: Check
@@ -37,6 +38,9 @@ jobs:
       # the echoed output provides github action output format, per
       # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjobs_idoutputs
       run: |
+        protoc --version
+        protoc-gen-go --version
+        protoc-gen-go-grpc --version
         if [[ -z "$(git status --porcelain)" ]];
         then
           exit 0
@@ -46,7 +50,7 @@ jobs:
           for file in $OUTPUT
           do
             f=$(echo $file | sed -e 's/^.* //')
-            echo "::error file=$f,line=1,col=1::File $f not in sync with `go generate`"
+            echo "::error file=$f,line=1,col=1::File $f not in sync with ``go generate``"
           done
           OUTPUT="${OUTPUT//'%'/'%25'}"
           OUTPUT="${OUTPUT//$'\n'/'%0A'}"

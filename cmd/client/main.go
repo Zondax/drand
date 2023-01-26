@@ -10,16 +10,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/urfave/cli/v2"
 
 	"github.com/drand/drand/client"
 	"github.com/drand/drand/cmd/client/lib"
 	"github.com/drand/drand/common"
 	"github.com/drand/drand/log"
-	"github.com/urfave/cli/v2"
 )
 
 // Automatically set through -ldflags
-// Example: go install -ldflags "-X main.buildDate=`date -u +%d/%m/%Y@%H:%M:%S` -X main.gitCommit=`git rev-parse HEAD`"
+// Example: go install -ldflags "-X main.buildDate=$(date -u +%d/%m/%Y@%H:%M:%S) -X main.gitCommit=$(git rev-parse HEAD)"
 var (
 	gitCommit = "none"
 	buildDate = "unknown"
@@ -36,31 +36,36 @@ var roundFlag = &cli.IntFlag{
 }
 
 var verboseFlag = &cli.BoolFlag{
-	Name:  "verbose",
-	Usage: "print debug-level log messages",
+	Name:    "verbose",
+	Usage:   "print debug-level log messages",
+	EnvVars: []string{"DRAND_CLIENT_VERBOSE"},
 }
 
 // client metric flags
 
 var clientMetricsAddressFlag = &cli.StringFlag{
-	Name:  "client-metrics-address",
-	Usage: "Server address for Prometheus metrics.",
-	Value: ":8080",
+	Name:    "client-metrics-address",
+	Usage:   "Server address for Prometheus metrics.",
+	Value:   ":8080",
+	EnvVars: []string{"DRAND_CLIENT_METRICS"},
 }
 
 var clientMetricsGatewayFlag = &cli.StringFlag{
-	Name:  "client-metrics-gateway",
-	Usage: "Push gateway for Prometheus metrics.",
+	Name:    "client-metrics-gateway",
+	Usage:   "Push gateway for Prometheus metrics.",
+	EnvVars: []string{"DRAND_CLIENT_METRICS_GATEWAY"},
 }
 
 var clientMetricsPushIntervalFlag = &cli.Int64Flag{
-	Name:  "client-metrics-push-interval",
-	Usage: "Push interval in seconds for Prometheus gateway.",
+	Name:    "client-metrics-push-interval",
+	Usage:   "Push interval in seconds for Prometheus gateway.",
+	EnvVars: []string{"DRAND_CLIENT_METRICS_PUSH_INTERVAL"},
 }
 
 var clientMetricsIDFlag = &cli.StringFlag{
-	Name:  "client-metrics-id",
-	Usage: "Unique identifier for the client instance, used by the metrics system.",
+	Name:    "client-metrics-id",
+	Usage:   "Unique identifier for the client instance, used by the metrics system.",
+	EnvVars: []string{"DRAND_CLIENT_METRICS_ID"},
 }
 
 func main() {
@@ -76,13 +81,18 @@ func main() {
 		clientMetricsAddressFlag, clientMetricsGatewayFlag, clientMetricsIDFlag,
 		clientMetricsPushIntervalFlag, verboseFlag)
 	app.Action = Client
+
+	// See https://cli.urfave.org/v2/examples/bash-completions/#enabling for how to turn on.
+	app.EnableBashCompletion = true
+
 	cli.VersionPrinter = func(c *cli.Context) {
 		fmt.Printf("drand client %s (date %v, commit %v)\n", version, buildDate, gitCommit)
 	}
 
 	err := app.Run(os.Args)
 	if err != nil {
-		panic(err)
+		fmt.Printf("an error was found while executing the command. Err: [%s] \n", err)
+		os.Exit(1)
 	}
 }
 
@@ -97,7 +107,7 @@ func Client(c *cli.Context) error {
 
 	log.ConfigureDefaultLogger(os.Stderr, level, c.Bool(lib.JSONFlag.Name))
 
-	opts := []client.Option{}
+	var opts []client.Option
 
 	if c.IsSet(clientMetricsIDFlag.Name) {
 		clientID := c.String(clientMetricsIDFlag.Name)
@@ -159,7 +169,12 @@ func newPrometheusBridge(address, gateway string, pushIntervalSec int64) prometh
 			Timeout: 10 * time.Second,
 		}))
 		go func() {
-			log.DefaultLogger().Fatalw("", "client", http.ListenAndServe(address, nil))
+			// http.ListenAndServe is marked as problematic
+			// because it does not have tweaked timeouts out of the box.
+
+			//nolint
+			err := http.ListenAndServe(address, nil)
+			log.DefaultLogger().Fatalw("", "client", err)
 		}()
 	}
 	return b

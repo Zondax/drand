@@ -2,19 +2,19 @@ package core
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/drand/drand/common"
+	"github.com/stretchr/testify/require"
 
+	"github.com/drand/drand/common"
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/protobuf/drand"
+	"github.com/drand/drand/test"
 	"github.com/drand/kyber"
 	"github.com/drand/kyber/share/dkg"
 	"github.com/drand/kyber/util/random"
-	"github.com/stretchr/testify/require"
 )
 
 type packInfo struct {
@@ -39,13 +39,13 @@ func withCallback(id string, b *echoBroadcast, cb callback) Broadcast {
 	}
 }
 
-func (cb *callbackBroadcast) BroadcastDKG(c context.Context, p *drand.DKGPacket) (*drand.Empty, error) {
-	r, err := cb.echoBroadcast.BroadcastDKG(c, p)
+func (cb *callbackBroadcast) BroadcastDKG(c context.Context, p *drand.DKGPacket) error {
+	err := cb.echoBroadcast.BroadcastDKG(c, p)
 	if err != nil {
-		return r, err
+		return err
 	}
 	cb.cb(&packInfo{id: cb.id, self: cb.echoBroadcast, p: p})
-	return r, err
+	return err
 }
 
 func TestBroadcastSet(t *testing.T) {
@@ -65,11 +65,9 @@ func TestBroadcastSet(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	n := 5
-	sch, beaconID := scheme.GetSchemeFromEnv(), common.GetBeaconIDFromEnv()
-
-	_, drands, group, dir, _ := BatchNewDrand(t, n, true, sch, beaconID)
-	defer os.RemoveAll(dir)
-	defer CloseAllDrands(drands)
+	sch, beaconID := scheme.GetSchemeFromEnv(), test.GetBeaconIDFromEnv()
+	//nolint:dogsled
+	_, drands, group, _, _ := BatchNewDrand(t, n, true, sch, beaconID)
 
 	// channel that will receive all broadcasted packets
 	incPackets := make(chan *packInfo)
@@ -81,7 +79,7 @@ func TestBroadcast(t *testing.T) {
 	ids := make([]string, 0, n)
 	for _, d := range drands {
 		id := d.priv.Public.Address()
-		version := common.Version{Major: 0, Minor: 0, Patch: 0}
+		version := common.GetAppVersion()
 		b := newEchoBroadcast(d.log, version, beaconID, d.privGateway.ProtocolClient,
 			id, group.Nodes, func(dkg.Packet) error { return nil })
 
@@ -99,6 +97,7 @@ func TestBroadcast(t *testing.T) {
 		for i := 0; i < exp; i++ {
 			select {
 			case info := <-incPackets:
+				t.Logf("received packet from %s, %d out of %d", info.id, i+1, exp)
 				received[info.id] = true
 			case <-time.After(5 * time.Second):
 				require.True(t, false, "test failed to continue")
@@ -118,7 +117,7 @@ func TestBroadcast(t *testing.T) {
 
 	// try again to broadcast but it shouldn't actually do it because the first
 	// node (the one we ask to send first) already has the hash registered.
-	_, err := broads[0].BroadcastDKG(context.Background(), dealPacket)
+	err := broads[0].BroadcastDKG(context.Background(), dealPacket)
 	require.NoError(t, err)
 	checkEmpty(t, incPackets)
 	require.Len(t, broads[0].dealCh, 0)
@@ -153,7 +152,7 @@ func sendNewDeal(t *testing.T, b *echoBroadcast) (packet *drand.DKGPacket, hash 
 	packet = &drand.DKGPacket{
 		Dkg: dealProto,
 	}
-	_, err = b.BroadcastDKG(context.Background(), packet)
+	err = b.BroadcastDKG(context.Background(), packet)
 	require.NoError(t, err)
 	hash = deal.Hash()
 	return

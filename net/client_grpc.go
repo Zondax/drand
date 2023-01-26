@@ -3,6 +3,7 @@ package net
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -10,14 +11,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drand/drand/log"
-	"github.com/drand/drand/metrics"
-	"github.com/drand/drand/protobuf/drand"
 	"github.com/weaveworks/common/httpgrpc"
 	httpgrpcserver "github.com/weaveworks/common/httpgrpc/server"
 	"golang.org/x/net/proxy"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/drand/drand/log"
+	"github.com/drand/drand/metrics"
+	"github.com/drand/drand/protobuf/drand"
 )
 
 var _ Client = (*grpcClient)(nil)
@@ -122,7 +126,7 @@ func (g *grpcClient) PublicRandStream(
 	go func() {
 		for {
 			resp, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				close(outCh)
 				return
 			}
@@ -142,20 +146,6 @@ func (g *grpcClient) PublicRandStream(
 		}
 	}()
 	return outCh, nil
-}
-
-func (g *grpcClient) PrivateRand(ctx context.Context, p Peer, in *drand.PrivateRandRequest) (*drand.PrivateRandResponse, error) {
-	var resp *drand.PrivateRandResponse
-	c, err := g.conn(p)
-	if err != nil {
-		return nil, err
-	}
-	client := drand.NewPublicClient(c)
-	ctx, cancel := g.getTimeoutContext(ctx)
-	defer cancel()
-
-	resp, err = client.PrivateRand(ctx, in)
-	return resp, err
 }
 
 func (g *grpcClient) ChainInfo(ctx context.Context, p Peer, in *drand.ChainInfoRequest) (*drand.ChainInfoPacket, error) {
@@ -215,7 +205,7 @@ func (g *grpcClient) PartialBeacon(ctx context.Context, p Peer, in *drand.Partia
 }
 
 // MaxSyncBuffer is the maximum number of queued rounds when syncing
-const MaxSyncBuffer = 100
+const MaxSyncBuffer = 500
 
 func (g *grpcClient) SyncChain(ctx context.Context, p Peer, in *drand.SyncRequest, opts ...CallOption) (chan *drand.BeaconPacket, error) {
 	resp := make(chan *drand.BeaconPacket, MaxSyncBuffer)
@@ -232,7 +222,7 @@ func (g *grpcClient) SyncChain(ctx context.Context, p Peer, in *drand.SyncReques
 		defer close(resp)
 		for {
 			reply, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				log.DefaultLogger().Infow("", "grpc client", "chain sync", "error", "eof", "to", p.Address())
 				log.DefaultLogger().Debugw(" --- STREAM EOF")
 				return
@@ -286,11 +276,18 @@ func (g *grpcClient) conn(p Peer) (*grpc.ClientConn, error) {
 	g.Lock()
 	defer g.Unlock()
 	var err error
+
 	c, ok := g.conns[p.Address()]
+	if ok && c.GetState() == connectivity.Shutdown {
+		ok = false
+		delete(g.conns, p.Address())
+		metrics.OutgoingConnectionState.WithLabelValues(p.Address()).Set(float64(c.GetState()))
+	}
+
 	if !ok {
 		log.DefaultLogger().Debugw("", "grpc client", "initiating", "to", p.Address(), "tls", p.IsTLS())
 		if !p.IsTLS() {
-			c, err = grpc.Dial(p.Address(), append(g.opts, grpc.WithInsecure())...)
+			c, err = grpc.Dial(p.Address(), append(g.opts, grpc.WithTransportCredentials(insecure.NewCredentials()))...)
 			if err != nil {
 				metrics.GroupDialFailures.WithLabelValues(p.Address()).Inc()
 			}
@@ -310,9 +307,17 @@ func (g *grpcClient) conn(p Peer) (*grpc.ClientConn, error) {
 				metrics.GroupDialFailures.WithLabelValues(p.Address()).Inc()
 			}
 		}
-		g.conns[p.Address()] = c
-		metrics.GroupConnections.Set(float64(len(g.conns)))
+		if err == nil {
+			g.conns[p.Address()] = c
+		}
 	}
+
+	// Emit the connection state regardless of whether it's a new or an existing connection
+	if err == nil {
+		metrics.OutgoingConnectionState.WithLabelValues(p.Address()).Set(float64(c.GetState()))
+	}
+
+	metrics.OutgoingConnections.Set(float64(len(g.conns)))
 	return c, err
 }
 

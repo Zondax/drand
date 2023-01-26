@@ -12,15 +12,15 @@ import (
 	"sort"
 	"time"
 
+	"github.com/BurntSushi/toml"
+	"golang.org/x/crypto/blake2b"
+
 	commonutils "github.com/drand/drand/common"
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/protobuf/common"
 	proto "github.com/drand/drand/protobuf/drand"
-
-	"github.com/BurntSushi/toml"
-	kyber "github.com/drand/kyber"
-	dkg "github.com/drand/kyber/share/dkg"
-	"golang.org/x/crypto/blake2b"
+	"github.com/drand/kyber"
+	"github.com/drand/kyber/share/dkg"
 )
 
 // XXX new256 returns an error so we make a wrapper around
@@ -116,8 +116,8 @@ func (g *Group) Hash() []byte {
 		_, _ = h.Write(g.PublicKey.Hash())
 	}
 
-	// Use it only if ID is not empty. Keep backward compatibility
-	if g.ID != "" {
+	// To keep backward compatibility
+	if !commonutils.IsDefaultBeaconID(g.ID) {
 		_, _ = h.Write([]byte(g.ID))
 	}
 
@@ -146,7 +146,7 @@ func (g *Group) String() string {
 
 // Equal indicates if two groups are equal
 func (g *Group) Equal(g2 *Group) bool {
-	if g.ID != g2.ID {
+	if !commonutils.CompareBeaconIDs(g.ID, g2.ID) {
 		return false
 	}
 	if g.Threshold != g2.Threshold {
@@ -211,7 +211,7 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 	for i, ptoml := range gt.Nodes {
 		g.Nodes[i] = new(Node)
 		if err := g.Nodes[i].FromTOML(ptoml); err != nil {
-			return fmt.Errorf("group: unwrapping node[%d]: %v", i, err)
+			return fmt.Errorf("group: unwrapping node[%d]: %w", i, err)
 		}
 	}
 
@@ -229,7 +229,7 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 		// dist key only if dkg ran
 		g.PublicKey = &DistPublic{}
 		if err = g.PublicKey.FromTOML(gt.PublicKey); err != nil {
-			return fmt.Errorf("group: unwrapping distributed public key: %v", err)
+			return fmt.Errorf("group: unwrapping distributed public key: %w", err)
 		}
 	}
 	g.Period, err = time.ParseDuration(gt.Period)
@@ -250,11 +250,12 @@ func (g *Group) FromTOML(i interface{}) (err error) {
 	}
 	if gt.GenesisSeed != "" {
 		if g.GenesisSeed, err = hex.DecodeString(gt.GenesisSeed); err != nil {
-			return fmt.Errorf("group: decoding genesis seed %v", err)
+			return fmt.Errorf("group: decoding genesis seed %w", err)
 		}
 	}
 
-	g.ID = gt.ID
+	// for backward compatibility we make sure to write "default" as beacon id if not set
+	g.ID = commonutils.GetCanonicalBeaconID(gt.ID)
 
 	return nil
 }
@@ -396,7 +397,7 @@ func GroupFromProto(g *proto.GroupPacket) (*Group, error) {
 	for _, coeff := range g.DistKey {
 		c := KeyGroup.Point()
 		if err := c.UnmarshalBinary(coeff); err != nil {
-			return nil, fmt.Errorf("invalid distributed key coefficients:%v", err)
+			return nil, fmt.Errorf("invalid distributed key coefficients:%w", err)
 		}
 		dist.Coefficients = append(dist.Coefficients, c)
 	}
@@ -454,7 +455,7 @@ func (g *Group) ToProto(version commonutils.Version) *proto.GroupPacket {
 	out.SchemeID = g.Scheme.ID
 
 	out.Metadata = common.NewMetadata(version.ToProto())
-	out.Metadata.BeaconID = g.ID
+	out.Metadata.BeaconID = commonutils.GetCanonicalBeaconID(g.ID)
 
 	if g.PublicKey != nil {
 		var coeffs = make([][]byte, len(g.PublicKey.Coefficients))

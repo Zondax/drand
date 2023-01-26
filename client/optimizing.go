@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/log"
-	"github.com/hashicorp/go-multierror"
 )
 
 const (
@@ -177,7 +178,7 @@ func (oc *optimizingClient) testSpeed() {
 	}
 
 	for {
-		stats := []*requestStat{}
+		var stats []*requestStat
 		ctx, cancel := context.WithCancel(context.Background())
 		ch := parallelGet(ctx, clients, 1, oc.requestTimeout, oc.requestConcurrency)
 
@@ -221,7 +222,7 @@ func (oc *optimizingClient) fastestClients() []Client {
 	oc.RLock()
 	defer oc.RUnlock()
 	// copy the current ordered client list so we iterate over a stable slice
-	var clients []Client
+	clients := make([]Client, 0, len(oc.stats))
 	for _, s := range oc.stats {
 		clients = append(clients, s.client)
 	}
@@ -231,7 +232,7 @@ func (oc *optimizingClient) fastestClients() []Client {
 // Get returns the randomness at `round` or an error.
 func (oc *optimizingClient) Get(ctx context.Context, round uint64) (res Result, err error) {
 	clients := oc.fastestClients()
-	stats := []*requestStat{}
+	var stats []*requestStat
 	ch := raceGet(ctx, clients, round, oc.requestTimeout, oc.requestConcurrency)
 	err = errors.New("no valid clients")
 
@@ -244,7 +245,7 @@ LOOP:
 			}
 			stats = append(stats, rr.stat)
 			res = rr.result
-			if rr.err != errEmptyClientUnsupportedGet && rr.err != nil {
+			if rr.err != nil && !errors.Is(rr.err, errEmptyClientUnsupportedGet) {
 				err = fmt.Errorf("%v - %w", err, rr.err)
 			} else if rr.err == nil {
 				err = nil
@@ -270,7 +271,7 @@ func get(ctx context.Context, client Client, round uint64) *requestResult {
 	var stat requestStat
 
 	// client failure, set a large RTT so it is sent to the back of the list
-	if err != nil && err != ctx.Err() {
+	if err != nil && !errors.Is(err, ctx.Err()) {
 		stat = requestStat{client, math.MaxInt64, start}
 		return &requestResult{client, res, err, &stat}
 	}
@@ -323,6 +324,7 @@ func parallelGet(ctx context.Context, clients []Client, round uint64, timeout ti
 		wg := sync.WaitGroup{}
 	LOOP:
 		for _, c := range clients {
+			c := c
 			select {
 			case <-token:
 				wg.Add(1)
@@ -418,6 +420,7 @@ func (oc *optimizingClient) Watch(ctx context.Context) <-chan Result {
 
 	closingClients := make(chan Client, 1)
 	for _, c := range oc.passiveClients {
+		c := c
 		go state.watchNext(ctx, c, inChan, closingClients)
 		state.protected = append(state.protected, watchingClient{c, nil})
 	}
@@ -606,11 +609,11 @@ CLIENT_LOOP:
 func (oc *optimizingClient) Info(ctx context.Context) (chainInfo *chain.Info, err error) {
 	clients := oc.fastestClients()
 	for _, c := range clients {
-		ctx, cancel := context.WithTimeout(context.Background(), oc.requestTimeout)
+		ctx, cancel := context.WithTimeout(ctx, oc.requestTimeout)
 		chainInfo, err = c.Info(ctx)
 		cancel()
 		if err == nil {
-			return
+			break
 		}
 	}
 	return
@@ -630,5 +633,6 @@ func (oc *optimizingClient) Close() error {
 		errs = multierror.Append(errs, c.Close())
 	}
 	close(oc.done)
+
 	return errs.ErrorOrNil()
 }

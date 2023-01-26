@@ -12,20 +12,21 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/drand/drand/chain"
-	"github.com/drand/drand/client"
-	"github.com/drand/drand/client/grpc"
-	"github.com/drand/drand/client/http"
-	"github.com/drand/drand/key"
-	"github.com/drand/drand/log"
-	"github.com/drand/drand/lp2p"
-	gclient "github.com/drand/drand/lp2p/client"
-
 	"github.com/google/uuid"
 	bds "github.com/ipfs/go-ds-badger2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/urfave/cli/v2"
+
+	"github.com/drand/drand/chain"
+	"github.com/drand/drand/client"
+	"github.com/drand/drand/client/grpc"
+	"github.com/drand/drand/client/http"
+	commonutils "github.com/drand/drand/common"
+	"github.com/drand/drand/key"
+	"github.com/drand/drand/log"
+	"github.com/drand/drand/lp2p"
+	gclient "github.com/drand/drand/lp2p/client"
 )
 
 var (
@@ -48,16 +49,16 @@ var (
 		Name:  "cert",
 		Usage: "Path to a file containing gRPC transport credentials of peer",
 	}
-	// HashFlag is the CLI flag for the hash (in hex) for the chain to follow.
+	// HashFlag is the CLI flag for the hash (in hex) of the targeted chain.
 	HashFlag = &cli.StringFlag{
 		Name:    "hash",
-		Usage:   "The hash (in hex) for the chain to follow",
-		Aliases: []string{"chain-hash"}, // DEPRECATED
+		Usage:   "The hash (in hex) of the chain to follow",
+		Aliases: []string{"chain-hash"},
 	}
 	// HashListFlag is the CLI flag for the hashes list (in hex) for the relay to follow.
 	HashListFlag = &cli.StringSliceFlag{
 		Name:  "hash-list",
-		Usage: "The hash list (in hex) for the relay to follow",
+		Usage: "Specify one hash in the list (in hex) of hashes the relay should follow",
 	}
 	// GroupConfFlag is the CLI flag for specifying the path to the drand group configuration (TOML encoded) or chain info (JSON encoded).
 	GroupConfFlag = &cli.PathFlag{
@@ -83,7 +84,7 @@ var (
 		Usage: "Local (host:)port for constructed libp2p host to listen on",
 	}
 
-	// JsonFlag is the CLI flag for enabling JSON output for logger
+	// JSONFlag is the value of the CLI flag `json` enabling JSON output of the loggers
 	JSONFlag = &cli.BoolFlag{
 		Name:  "json",
 		Usage: "Set the output as json format",
@@ -128,14 +129,14 @@ func Create(c *cli.Context, withInstrumentation bool, opts ...client.Option) (cl
 	clients = append(clients, gc...)
 
 	var hash []byte
-	if c.IsSet(HashFlag.Name) {
+	if c.IsSet(HashFlag.Name) && c.String(HashFlag.Name) != "" {
 		hash, err = hex.DecodeString(c.String(HashFlag.Name))
 		if err != nil {
 			return nil, err
 		}
 		if info != nil && !bytes.Equal(hash, info.Hash()) {
 			return nil, fmt.Errorf(
-				"incorrect chain hash %v != %v",
+				"%w %v != %v", commonutils.ErrInvalidChainHash,
 				c.String(HashFlag.Name),
 				hex.EncodeToString(info.Hash()),
 			)
@@ -193,7 +194,7 @@ func buildGrpcClient(c *cli.Context, info **chain.Info) ([]client.Client, error)
 func buildHTTPClients(c *cli.Context, info **chain.Info, hash []byte, withInstrumentation bool) []client.Client {
 	clients := make([]client.Client, 0)
 	var err error
-	skipped := []string{}
+	var skipped []string
 	var hc client.Client
 	for _, url := range c.StringSlice(URLFlag.Name) {
 		if *info != nil {

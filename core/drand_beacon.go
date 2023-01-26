@@ -8,30 +8,36 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drand/drand/common"
-
 	"github.com/drand/drand/chain"
-	"github.com/drand/drand/chain/boltdb"
-	"github.com/drand/drand/fs"
-
 	"github.com/drand/drand/chain/beacon"
+	"github.com/drand/drand/chain/boltdb"
+	"github.com/drand/drand/chain/memdb"
+	"github.com/drand/drand/chain/postgresdb/pgdb"
+	commonutils "github.com/drand/drand/common"
+	"github.com/drand/drand/fs"
 	"github.com/drand/drand/key"
 	dlog "github.com/drand/drand/log"
+	"github.com/drand/drand/metrics"
 	"github.com/drand/drand/net"
+	"github.com/drand/drand/protobuf/common"
+	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/kyber/share/dkg"
 )
 
 // BeaconProcess is the main logic of the program. It reads the keys / group file, it
-// can start the DKG, read/write shars to files and can initiate/respond to TBlS
+// can start the DKG, read/write shares to files and can initiate/respond to tBLS
 // signature requests.
 type BeaconProcess struct {
-	opts *Config
-	priv *key.Pair
+	opts      *Config
+	priv      *key.Pair
+	beaconID  string
+	chainHash []byte
 	// current group this drand node is using
 	group *key.Group
 	index int
 
 	store       key.Store
+	dbStore     chain.Store
 	privGateway *net.PrivateGateway
 	pubGateway  *net.PublicGateway
 
@@ -40,6 +46,9 @@ type BeaconProcess struct {
 	// dkg private share. can be nil if dkg not finished yet.
 	share   *key.Share
 	dkgDone bool
+
+	// version indicates the base code variant
+	version commonutils.Version
 
 	// manager is created and destroyed during a setup phase
 	manager  *setupManager
@@ -65,29 +74,27 @@ type BeaconProcess struct {
 	// a list of paramteres at each DKG (inluding this callback)
 	setupCB func(*key.Group)
 
-	// version indicates the base code variant
-	version common.Version
-
 	// only used for testing at the moment - may be useful later
 	// to pinpoint the exact messages from all nodes during dkg
 	dkgBoardSetup func(Broadcast) Broadcast
 }
 
-func NewBeaconProcess(log dlog.Logger, store key.Store, opts *Config, privGateway *net.PrivateGateway,
+func NewBeaconProcess(log dlog.Logger, store key.Store, beaconID string, opts *Config, privGateway *net.PrivateGateway,
 	pubGateway *net.PublicGateway) (*BeaconProcess, error) {
 	priv, err := store.LoadKeyPair()
 	if err != nil {
 		return nil, err
 	}
 	if err := priv.Public.ValidSignature(); err != nil {
-		return nil, fmt.Errorf("INVALID SELF SIGNATURE %s. Action: run `drand util self-sign`", err)
+		return nil, fmt.Errorf("INVALID SELF SIGNATURE %w. Action: run `drand util self-sign`", err)
 	}
 
 	bp := &BeaconProcess{
+		beaconID:    commonutils.GetCanonicalBeaconID(beaconID),
 		store:       store,
 		log:         log,
 		priv:        priv,
-		version:     common.GetAppVersion(),
+		version:     commonutils.GetAppVersion(),
 		opts:        opts,
 		privGateway: privGateway,
 		pubGateway:  pubGateway,
@@ -110,14 +117,35 @@ func (bp *BeaconProcess) Load() (bool, error) {
 		return false, err
 	}
 
+	beaconID := bp.getBeaconID()
+	if bp.group == nil {
+		bp.dkgDone = false
+		metrics.DKGStateChange(metrics.DKGNotStarted, beaconID, false)
+		return false, nil
+	}
+
+	bp.state.Lock()
+	info := chain.NewChainInfo(bp.group)
+	bp.chainHash = info.Hash()
 	checkGroup(bp.log, bp.group)
+	bp.state.Unlock()
+
 	bp.share, err = bp.store.LoadShare()
 	if err != nil {
 		return false, err
 	}
 
-	bp.log.Debugw("", "beacon_id", bp.group.ID, "serving", bp.priv.Public.Address())
-	bp.dkgDone = false
+	thisBeacon := bp.group.Find(bp.priv.Public)
+	if thisBeacon == nil {
+		return false, fmt.Errorf("could not restore beacon info for the given identity - this can happen if you updated the group file manually")
+	}
+	bp.state.Lock()
+	bp.index = int(thisBeacon.Index)
+	bp.log = bp.log.Named(fmt.Sprint(bp.index))
+	bp.state.Unlock()
+
+	bp.log.Debugw("", "serving", bp.priv.Public.Address())
+	metrics.DKGStateChange(metrics.DKGDone, beaconID, false)
 
 	return false, nil
 }
@@ -132,14 +160,22 @@ func (bp *BeaconProcess) WaitDKG() (*key.Group, error) {
 		bp.state.Unlock()
 		return nil, errors.New("no dkg info set")
 	}
+
+	beaconID := bp.getBeaconID()
+	defer func() {
+		metrics.DKGStateChange(metrics.DKGDone, beaconID, false)
+	}()
+
+	metrics.DKGStateChange(metrics.DKGWaiting, beaconID, false)
+
 	waitCh := bp.dkgInfo.proto.WaitEnd()
-	bp.log.Debugw("", "beacon_id", bp.dkgInfo.target.ID, "waiting_dkg_end", time.Now())
+	bp.log.Infow("", "waiting_dkg_end", time.Now())
 
 	bp.state.Unlock()
 
 	res := <-waitCh
 	if res.Error != nil {
-		return nil, fmt.Errorf("drand: error from dkg: %v", res.Error)
+		return nil, fmt.Errorf("drand: error from dkg: %w", res.Error)
 	}
 
 	bp.state.Lock()
@@ -147,10 +183,17 @@ func (bp *BeaconProcess) WaitDKG() (*key.Group, error) {
 	// filter the nodes that are not present in the target group
 	var qualNodes []*key.Node
 	for _, node := range bp.dkgInfo.target.Nodes {
+		found := false
 		for _, qualNode := range res.Result.QUAL {
 			if qualNode.Index == node.Index {
 				qualNodes = append(qualNodes, node)
+				found = true
+				break
 			}
+		}
+
+		if !found {
+			bp.log.Infow("disqualified node during DKG", "node", node)
 		}
 	}
 
@@ -165,11 +208,13 @@ func (bp *BeaconProcess) WaitDKG() (*key.Group, error) {
 	// setup the dist. public key
 	targetGroup.PublicKey = bp.share.Public()
 	bp.group = targetGroup
-	var output []string
+	info := chain.NewChainInfo(targetGroup)
+	bp.chainHash = info.Hash()
+	output := make([]string, 0, len(qualNodes))
 	for _, node := range qualNodes {
 		output = append(output, fmt.Sprintf("{addr: %s, idx: %bp, pub: %s}", node.Address(), node.Index, node.Key))
 	}
-	bp.log.Debugw("", "beacon_id", bp.group.ID, "dkg_end", time.Now(), "certified", bp.group.Len(), "list", "["+strings.Join(output, ",")+"]")
+	bp.log.Infow("", "dkg_end", time.Now(), "certified", bp.group.Len(), "list", "["+strings.Join(output, ",")+"]")
 	if err := bp.store.SaveGroup(bp.group); err != nil {
 		return nil, err
 	}
@@ -181,20 +226,25 @@ func (bp *BeaconProcess) WaitDKG() (*key.Group, error) {
 
 // StartBeacon initializes the beacon if needed and launch a go
 // routine that runs the generation loop.
-func (bp *BeaconProcess) StartBeacon(catchup bool) {
-	beaconID := bp.group.ID
+func (bp *BeaconProcess) StartBeacon(catchup bool) error {
 	b, err := bp.newBeacon()
 	if err != nil {
-		bp.log.Errorw("", "beacon_id", beaconID, "init_beacon", err)
-		return
+		bp.log.Errorw("", "init_beacon", err)
+		return err
 	}
 
-	bp.log.Infow("", "beacon_id", beaconID, "beacon_start", time.Now(), "catchup", catchup)
+	bp.log.Infow("", "beacon_start", bp.opts.clock.Now(), "catchup", catchup)
 	if catchup {
-		go b.Catchup()
+		// This doesn't need to be called async.
+		// In the future, we might want to wait and return any errors from it too.
+		// TODO: Add error handling for this method and handle it here.
+		b.Catchup()
 	} else if err := b.Start(); err != nil {
-		bp.log.Errorw("", "beacon_id", beaconID, "beacon_start", err)
+		bp.log.Errorw("", "beacon_start", err)
+		return err
 	}
+
+	return nil
 }
 
 // transition between an "old" group and a new group. This method is called
@@ -211,15 +261,14 @@ func (bp *BeaconProcess) transition(oldGroup *key.Group, oldPresent, newPresent 
 	// NOTE: this limits the round time of drand - for now it is not a use
 	// case to go that fast
 
-	beaconID := oldGroup.ID
 	timeToStop := bp.group.TransitionTime - 1
 
 	if !newPresent {
 		// an old node is leaving the network
 		if err := bp.beacon.StopAt(timeToStop); err != nil {
-			bp.log.Errorw("", "beacon_id", beaconID, "leaving_group", err)
+			bp.log.Errorw("", "leaving_group", err)
 		} else {
-			bp.log.Infow("", "beacon_id", beaconID, "leaving_group", "done", "time", bp.opts.clock.Now())
+			bp.log.Infow("", "leaving_group", "done", "time", bp.opts.clock.Now())
 		}
 		return
 	}
@@ -235,19 +284,32 @@ func (bp *BeaconProcess) transition(oldGroup *key.Group, oldPresent, newPresent 
 	} else {
 		b, err := bp.newBeacon()
 		if err != nil {
-			bp.log.Fatalw("", "beacon_id", beaconID, "transition", "new_node", "err", err)
+			bp.log.Fatalw("", "transition", "new_node", "err", err)
 		}
 		if err := b.Transition(oldGroup); err != nil {
-			bp.log.Errorw("", "beacon_id", beaconID, "sync_before", err)
+			bp.log.Errorw("", "sync_before", err)
 		}
-		bp.log.Infow("", "beacon_id", beaconID, "transition_new", "done")
+		bp.log.Infow("", "transition_new", "done")
 	}
 }
 
 // Stop simply stops all drand operations.
 func (bp *BeaconProcess) Stop(ctx context.Context) {
+	select {
+	case <-bp.exitCh:
+		bp.log.Errorw("Trying to stop an already stopping beacon process", "id", bp.getBeaconID())
+		return
+	default:
+		bp.log.Debugw("Stopping BeaconProcess", "id", bp.getBeaconID())
+	}
 	bp.StopBeacon()
-	bp.exitCh <- true
+	// we wait until we can send on the channel or the context got canceled
+	select {
+	case bp.exitCh <- true:
+		close(bp.exitCh)
+	case <-ctx.Done():
+		bp.log.Warnw("Context canceled, BeaconProcess exitCh probably blocked")
+	}
 }
 
 // WaitExit returns a channel that signals when drand stops its operations
@@ -255,15 +317,34 @@ func (bp *BeaconProcess) WaitExit() chan bool {
 	return bp.exitCh
 }
 
-func (bp *BeaconProcess) createBoltStore(dbName string) (chain.Store, error) {
-	if dbName == "" {
-		dbName = common.DefaultBeaconID
+func (bp *BeaconProcess) createDBStore() (chain.Store, error) {
+	beaconName := commonutils.GetCanonicalBeaconID(bp.beaconID)
+	var dbStore chain.Store
+	var err error
+
+	switch bp.opts.dbStorageEngine {
+	case chain.BoltDB:
+		dbPath := bp.opts.DBFolder(beaconName)
+		fs.CreateSecureFolder(dbPath)
+		dbStore, err = boltdb.NewBoltStore(bp.log, dbPath, bp.opts.boltOpts)
+
+	case chain.MemDB:
+		dbStore, err = memdb.NewStore(bp.opts.memDBSize), nil
+
+	case chain.PostgreSQL:
+		dbStore, err = pgdb.NewStore(context.TODO(), bp.log, bp.opts.pgConn, beaconName)
+
+	default:
+		bp.log.Error("unknown database storage engine type", bp.opts.dbStorageEngine)
+
+		dbPath := bp.opts.DBFolder(beaconName)
+		fs.CreateSecureFolder(dbPath)
+
+		dbStore, err = boltdb.NewBoltStore(bp.log, dbPath, bp.opts.boltOpts)
 	}
 
-	dbPath := bp.opts.DBFolder(dbName)
-	fs.CreateSecureFolder(dbPath)
-
-	return boltdb.NewBoltStore(dbPath, bp.opts.boltOpts)
+	bp.dbStore = dbStore
+	return dbStore, err
 }
 
 func (bp *BeaconProcess) newBeacon() (*beacon.Handler, error) {
@@ -276,6 +357,12 @@ func (bp *BeaconProcess) newBeacon() (*beacon.Handler, error) {
 	if node == nil {
 		return nil, fmt.Errorf("public key %s not found in group", pub)
 	}
+
+	store, err := bp.createDBStore()
+	if err != nil {
+		return nil, err
+	}
+
 	conf := &beacon.Config{
 		Public: node,
 		Group:  bp.group,
@@ -283,9 +370,19 @@ func (bp *BeaconProcess) newBeacon() (*beacon.Handler, error) {
 		Clock:  bp.opts.clock,
 	}
 
-	store, err := bp.createBoltStore(bp.group.ID)
-	if err != nil {
-		return nil, err
+	if bp.opts.dbStorageEngine == chain.MemDB {
+		ctx := context.Background()
+		err := bp.storeCurrentFromPeerNetwork(ctx, store)
+		if err != nil {
+			if errors.Is(err, errNoRoundInPeers) {
+				bp.log.Warnw("failed to find target beacon in peer network. Reverting to synced startup", "err", err)
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				bp.log.Warnw("failed to find target beacon in peer network in a reasonable time. Reverting to synced startup", "err", err)
+			} else {
+				bp.log.Errorw("got error from storing the beacon in db at startup", "err", err)
+				return nil, err
+			}
+		}
 	}
 
 	b, err := beacon.NewHandler(bp.privGateway.ProtocolClient, store, conf, bp.log, bp.version)
@@ -303,17 +400,15 @@ func (bp *BeaconProcess) newBeacon() (*beacon.Handler, error) {
 }
 
 func checkGroup(l dlog.Logger, group *key.Group) {
-	beaconID := group.ID
-
 	unsigned := group.UnsignedIdentities()
 	if unsigned == nil {
 		return
 	}
-	var info []string
+	info := make([]string, 0, len(unsigned))
 	for _, n := range unsigned {
 		info = append(info, fmt.Sprintf("{%s - %s}", n.Address(), key.PointToString(n.Key)[0:10]))
 	}
-	l.Infow("", "beacon_id", beaconID, "UNSIGNED_GROUP", "["+strings.Join(info, ",")+"]", "FIX", "upgrade")
+	l.Infow("", "UNSIGNED_GROUP", "["+strings.Join(info, ",")+"]", "FIX", "upgrade")
 }
 
 // StopBeacon stops the beacon generation process and resets it.
@@ -332,7 +427,150 @@ func (bp *BeaconProcess) isFreshRun() bool {
 	_, errG := bp.store.LoadGroup()
 	_, errS := bp.store.LoadShare()
 
-	return errG != nil || errS != nil
+	isFresh := errG != nil || errS != nil
+
+	bp.log.Debugw("Status when loading group or share", "group error", errG, "share error", errS, "will run as fresh run", isFresh)
+
+	return isFresh
+}
+
+// getChainHash return the beaconID of that beaconProcess, if set
+func (bp *BeaconProcess) getBeaconID() string {
+	return bp.beaconID
+}
+
+// getChainHash return the HashChain in hex format as a string
+func (bp *BeaconProcess) getChainHash() []byte {
+	return bp.chainHash
+}
+
+func (bp *BeaconProcess) newMetadata() *common.Metadata {
+	metadata := common.NewMetadata(bp.version.ToProto())
+	metadata.BeaconID = bp.getBeaconID()
+
+	if hash := bp.getChainHash(); len(hash) > 0 {
+		metadata.ChainHash = hash
+	}
+
+	return metadata
+}
+
+var errNoRoundInPeers = errors.New("could not find round")
+
+func (bp *BeaconProcess) storeCurrentFromPeerNetwork(ctx context.Context, store chain.Store) error {
+	clkNow := bp.opts.clock.Now().Unix()
+	if bp.group == nil {
+		return nil
+	}
+
+	targetRound := chain.CurrentRound(clkNow, bp.group.Period, bp.group.GenesisTime)
+
+	//nolint:gomnd // We cannot sync the initial round.
+	if targetRound < 2 {
+		// Assume this is a fresh start
+		return nil
+	}
+
+	peers := bp.computePeers(bp.group.Nodes)
+	targetBeacon, err := bp.loadBeaconFromPeers(ctx, targetRound, peers)
+	if errors.Is(err, errNoRoundInPeers) {
+		// If we can't find the desired beacon round, let's try with the previous one.
+		// We don't want to try round 0 because that won't validate as it doesn't contain
+		// a previous signature.
+		// In this case, we'll just let the beacon sync everything from scratch.
+		if targetRound > 1 {
+			targetBeacon, err = bp.loadBeaconFromPeers(ctx, targetRound-1, peers)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	verif := chain.NewVerifier(bp.group.Scheme)
+	err = verif.VerifyBeacon(targetBeacon, bp.group.PublicKey.Key())
+	if err != nil {
+		bp.log.Errorw("failed to verify beacon", "err", err)
+		return err
+	}
+
+	err = store.Put(ctx, &targetBeacon)
+	if err != nil {
+		bp.log.Errorw("failed to store beacon", "err", err)
+	}
+	return err
+}
+
+func (bp *BeaconProcess) loadBeaconFromPeers(ctx context.Context, targetRound uint64, peers []net.Peer) (chain.Beacon, error) {
+	select {
+	case <-ctx.Done():
+		return chain.Beacon{}, ctx.Err()
+	default:
+	}
+
+	type answer struct {
+		peer net.Peer
+		b    chain.Beacon
+		err  error
+	}
+
+	answers := make(chan answer, len(peers))
+
+	//nolint:gomnd //We should search for the beacon for at most 10 seconds.
+	ctxFind, cancelFind := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelFind()
+
+	prr := drand.PublicRandRequest{
+		Round:    targetRound,
+		Metadata: bp.newMetadata(),
+	}
+
+	for _, peer := range peers {
+		go func(peer net.Peer) {
+			b := chain.Beacon{}
+			r, err := bp.privGateway.PublicRand(ctxFind, peer, &prr)
+			if err == nil && r != nil {
+				b = chain.Beacon{
+					PreviousSig: r.PreviousSignature,
+					Round:       r.Round,
+					Signature:   r.Signature,
+				}
+			}
+			answers <- answer{peer, b, err}
+		}(peer)
+	}
+
+	for i := 0; i < len(peers); i++ {
+		select {
+		case ans := <-answers:
+			if ans.err != nil {
+				bp.log.Errorw("failed to get rand value from peer", "round", targetRound, "err", ans.err, "peer", ans.peer.Address())
+				continue
+			}
+
+			return ans.b, nil
+		case <-ctxFind.Done():
+			return chain.Beacon{}, ctxFind.Err()
+		case <-ctx.Done():
+			return chain.Beacon{}, ctx.Err()
+		}
+	}
+
+	return chain.Beacon{}, fmt.Errorf("%w %d in any peer", errNoRoundInPeers, targetRound)
+}
+
+func (bp *BeaconProcess) computePeers(nodes []*key.Node) []net.Peer {
+	nodeAddr := bp.priv.Public.Address()
+	var peers []net.Peer
+	for i := 0; i < len(nodes); i++ {
+		if nodes[i].Address() == nodeAddr {
+			// we ignore our own node
+			continue
+		}
+
+		peers = append(peers, nodes[i].Identity)
+	}
+	return peers
 }
 
 // dkgInfo is a simpler wrapper that keeps the relevant config and logic

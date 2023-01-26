@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/drand/drand/common"
 	"github.com/drand/drand/common/scheme"
 	"github.com/drand/drand/protobuf/drand"
 	"github.com/drand/kyber"
 	"github.com/drand/kyber/util/random"
-	"github.com/stretchr/testify/require"
 )
 
 func newIds(n int) []*Node {
@@ -75,7 +76,7 @@ func TestGroupProtobuf(t *testing.T) {
 		isErr:  false,
 	})
 
-	version := common.Version{Major: 0, Minor: 0, Patch: 0}
+	version := common.GetAppVersion()
 	for i, tv := range vectors {
 		protoGroup := tv.group.ToProto(version)
 		if tv.change != nil {
@@ -87,6 +88,9 @@ func TestGroupProtobuf(t *testing.T) {
 			require.Error(t, err)
 			continue
 		}
+
+		require.NoError(t, err)
+
 		// load the seed after
 		seed := tv.group.GetGenesisSeed()
 		require.Equal(t, len(loaded.Nodes), len(tv.group.Nodes), "test %d", i)
@@ -132,11 +136,10 @@ func TestGroupSaveLoad(t *testing.T) {
 	require.NotNil(t, gtoml.PublicKey)
 
 	// faking distributed public key coefficients
-	groupFile, err := os.CreateTemp("", "group.toml")
+	groupFile, err := os.CreateTemp(t.TempDir(), "group.toml")
 	require.NoError(t, err)
 	groupPath := groupFile.Name()
 	groupFile.Close()
-	defer os.RemoveAll(groupPath)
 
 	require.NoError(t, Save(groupPath, group, false))
 	// load the seed after
@@ -173,7 +176,7 @@ func TestConvertGroup(t *testing.T) {
 	group.Period = 5 * time.Second
 	group.TransitionTime = time.Now().Unix()
 	group.GenesisTime = time.Now().Unix()
-	version := common.Version{Major: 0, Minor: 0, Patch: 0}
+	version := common.GetAppVersion()
 
 	proto := group.ToProto(version)
 	received, err := GroupFromProto(proto)

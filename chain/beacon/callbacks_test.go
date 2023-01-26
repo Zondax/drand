@@ -1,20 +1,22 @@
 package beacon
 
 import (
-	"os"
+	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/drand/drand/chain"
 	"github.com/drand/drand/chain/boltdb"
-	"github.com/stretchr/testify/require"
+	"github.com/drand/drand/test"
 )
 
 func TestStoreCallback(t *testing.T) {
-	dir, err := os.MkdirTemp("", "*")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-	bbstore, err := boltdb.NewBoltStore(dir, nil)
+	dir := t.TempDir()
+	ctx := context.Background()
+	l := test.Logger(t)
+	bbstore, err := boltdb.NewBoltStore(l, dir, nil)
 	require.NoError(t, err)
 	cb := NewCallbackStore(bbstore)
 	id1 := "superid"
@@ -23,12 +25,12 @@ func TestStoreCallback(t *testing.T) {
 		doneCh <- true
 	})
 
-	cb.Put(&chain.Beacon{
+	cb.Put(ctx, &chain.Beacon{
 		Round: 1,
 	})
 	require.True(t, checkOne(doneCh))
 	cb.AddCallback(id1, func(*chain.Beacon) {})
-	cb.Put(&chain.Beacon{
+	cb.Put(ctx, &chain.Beacon{
 		Round: 1,
 	})
 	require.False(t, checkOne(doneCh))

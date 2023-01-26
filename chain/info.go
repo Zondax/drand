@@ -7,22 +7,22 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/drand/drand/common"
 	"github.com/drand/drand/common/scheme"
-
 	"github.com/drand/drand/key"
 	"github.com/drand/drand/log"
 	"github.com/drand/kyber"
 )
 
 // Info represents the public information that is necessary for a client to
-// very any beacon present in a randomness chain.
+// verify any beacon present in a randomness chain.
 type Info struct {
 	PublicKey   kyber.Point   `json:"public_key"`
 	ID          string        `json:"id"`
 	Period      time.Duration `json:"period"`
 	Scheme      scheme.Scheme `json:"scheme"`
 	GenesisTime int64         `json:"genesis_time"`
-	GroupHash   []byte        `json:"group_hash"`
+	GenesisSeed []byte        `json:"group_hash"`
 }
 
 // NewChainInfo makes a chain Info from a group
@@ -33,7 +33,7 @@ func NewChainInfo(g *key.Group) *Info {
 		Scheme:      g.Scheme,
 		PublicKey:   g.PublicKey.Key(),
 		GenesisTime: g.GenesisTime,
-		GroupHash:   g.GetGenesisSeed(),
+		GenesisSeed: g.GetGenesisSeed(),
 	}
 }
 
@@ -51,10 +51,10 @@ func (c *Info) Hash() []byte {
 	}
 
 	_, _ = h.Write(buff)
-	_, _ = h.Write(c.GroupHash)
+	_, _ = h.Write(c.GenesisSeed)
 
-	// Use it only if ID is not empty. Keep backward compatibility
-	if c.ID != "" {
+	// To keep backward compatibility
+	if !common.IsDefaultBeaconID(c.ID) {
 		_, _ = h.Write([]byte(c.ID))
 	}
 
@@ -71,6 +71,12 @@ func (c *Info) Equal(c2 *Info) bool {
 	return c.GenesisTime == c2.GenesisTime &&
 		c.Period == c2.Period &&
 		c.PublicKey.Equal(c2.PublicKey) &&
-		bytes.Equal(c.GroupHash, c2.GroupHash) &&
-		c.ID == c2.ID
+		bytes.Equal(c.GenesisSeed, c2.GenesisSeed) &&
+		common.CompareBeaconIDs(c.ID, c2.ID)
+}
+
+// Verifier returns the verifier used to verify the beacon produced by this
+// chain
+func (c *Info) Verifier() *Verifier {
+	return NewVerifier(c.Scheme)
 }

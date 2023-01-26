@@ -3,8 +3,9 @@ package drand
 import (
 	"fmt"
 
-	"github.com/drand/drand/core"
 	"github.com/urfave/cli/v2"
+
+	"github.com/drand/drand/core"
 )
 
 func startCmd(c *cli.Context) error {
@@ -13,13 +14,18 @@ func startCmd(c *cli.Context) error {
 	// Create and start drand daemon
 	drandDaemon, err := core.NewDrandDaemon(conf)
 	if err != nil {
-		return fmt.Errorf("can't instantiate drand daemon %s", err)
+		return fmt.Errorf("can't instantiate drand daemon %w", err)
+	}
+
+	singleBeacon := false
+	if c.IsSet(beaconIDFlag.Name) {
+		singleBeacon = true
 	}
 
 	// Check stores and start BeaconProcess
-	err = drandDaemon.LoadBeacons(c.String(metricsFlag.Name))
+	err = drandDaemon.LoadBeaconsFromDisk(c.String(metricsFlag.Name), singleBeacon, c.String(beaconIDFlag.Name))
 	if err != nil {
-		return fmt.Errorf("couldn't load existing beacons: %s", err)
+		return fmt.Errorf("couldn't load existing beacons: %w", err)
 	}
 
 	<-drandDaemon.WaitExit()
@@ -32,15 +38,18 @@ func stopDaemon(c *cli.Context) error {
 		return err
 	}
 
-	beaconID := c.String(beaconIDFlag.Name)
-	_, err = ctrlClient.Shutdown(beaconID)
+	isBeaconIDSet := c.IsSet(beaconIDFlag.Name)
+	if isBeaconIDSet {
+		beaconID := getBeaconID(c)
+		_, err = ctrlClient.Shutdown(beaconID)
 
-	if beaconID != "" {
 		if err != nil {
 			return fmt.Errorf("error stopping beacon process [%s]: %w", beaconID, err)
 		}
 		fmt.Fprintf(output, "beacon process [%s] stopped correctly. Bye.\n", beaconID)
 	} else {
+		_, err = ctrlClient.Shutdown("")
+
 		if err != nil {
 			return fmt.Errorf("error stopping drand daemon: %w", err)
 		}
